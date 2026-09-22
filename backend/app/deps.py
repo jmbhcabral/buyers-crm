@@ -89,6 +89,21 @@ def get_current_consultor(
     return consultor
 
 
+def get_optional_consultor(
+    db: DbSession,
+    user: User = Depends(get_current_user),
+) -> Consultor | None:
+    """Como get_current_consultor, mas devolve None em vez de lançar 403.
+
+    Útil para endpoints que aceitam tanto consultores como admins
+    (admins podem não ter perfil de consultor associado).
+    """
+    consultor = db.scalar(select(Consultor).where(Consultor.user_id == user.id))
+    if consultor is not None and not consultor.ativo:
+        return None
+    return consultor
+
+
 def get_admin_user(user: User = Depends(get_current_user)) -> User:
     """Exige que o utilizador autenticado seja admin."""
     if not user.is_admin:
