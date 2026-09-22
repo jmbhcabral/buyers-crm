@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import api_keys, auth, me, clientes, consultores
+from app.routers import api_keys, auth, me, clientes, consultores, imoveis
 
 app = FastAPI(
     title="Buyers CRM API",
@@ -30,6 +30,7 @@ app.include_router(me.router, prefix="/api")
 app.include_router(api_keys.router, prefix="/api")
 app.include_router(clientes.router, prefix="/api")
 app.include_router(consultores.router, prefix="/api")
+app.include_router(imoveis.router, prefix="/api")
 
 
 @app.get("/health", tags=["sistema"])

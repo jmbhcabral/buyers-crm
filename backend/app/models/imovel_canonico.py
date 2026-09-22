@@ -35,6 +35,7 @@ class ImovelCanonico(Base, PKMixin, TimestampMixin):
     ad_commercial_name: Mapped[str | None] = mapped_column(String(255))
     ad_professional_name: Mapped[str | None] = mapped_column(String(255))
     anunciante: Mapped[str | None] = mapped_column(String(255))
+    referencia_anunciante: Mapped[str | None] = mapped_column(String(120))
 
     # Estruturas complexas
     caracteristicas: Mapped[list[Any] | None] = mapped_column(JSONB)
