@@ -1,0 +1,57 @@
+[project]
+name = "buyers-crm-backend"
+version = "0.1.0"
+description = "Backend do Buyers CRM — captação de imóveis do Idealista, gestão de clientes e geração de PDF."
+requires-python = ">=3.11"
+dependencies = [
+    # Web
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.12",
+
+    # DB
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.13.3",
+    "psycopg[binary]>=3.2.3",
+    "pydantic>=2.9.2",
+    "pydantic-settings>=2.6.0",
+
+    # Auth (bcrypt direto, sem passlib)
+    "bcrypt>=4.2.0",
+    "python-jose[cryptography]>=3.3.0",
+
+    # HTTP client (download de fotos)
+    "httpx>=0.27.2",
+
+    # PDF
+    "reportlab>=4.2.5",
+    "pillow>=10.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.2",
+    "ruff>=0.7.0",
+    "ipython>=8.29.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
