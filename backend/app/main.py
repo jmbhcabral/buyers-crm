@@ -4,25 +4,29 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routers import auth, me
 
 app = FastAPI(
     title="Buyers CRM API",
     description="Captação de imóveis do Idealista, gestão de clientes e geração de PDF.",
     version="0.1.0",
-    docs_url="/docs" if settings.is_dev else None,   # docs só em dev
+    docs_url="/docs" if settings.is_dev else None,
     redoc_url="/redoc" if settings.is_dev else None,
 )
 
-# CORS — em dev, aceitamos tudo (o frontend React vai estar noutra porta).
-# Em produção, restringimos à origem do frontend.
 if settings.is_dev:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origin_regex=".*",     # aceita qualquer origem em dev
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+# --- Routers ---
+app.include_router(auth.router, prefix="/api")
+app.include_router(me.router, prefix="/api")
 
 
 @app.get("/health", tags=["sistema"])

@@ -99,7 +99,7 @@ def main() -> None:
         # ------------------------------------------------------------------
         admin, criado_admin = get_or_create_user(
             db,
-            email="admin@buyers-crm.local",
+            email="admin@buyers-crm.pt",
             password="admin",
             nome="Administrador",
             is_admin=True,
@@ -111,7 +111,7 @@ def main() -> None:
         # ------------------------------------------------------------------
         jorge_user, criado_jorge = get_or_create_user(
             db,
-            email="jorge@buyers-crm.local",
+            email="jorge@buyers-crm.pt",
             password="jorge",
             nome="Jorge Cabral",
             is_admin=False,
@@ -142,7 +142,7 @@ def main() -> None:
         # ------------------------------------------------------------------
         maria_user, criado_maria = get_or_create_user(
             db,
-            email="maria@buyers-crm.local",
+            email="maria@buyers-crm.pt",
             password="maria",
             nome="Maria Silva",
             is_admin=False,
