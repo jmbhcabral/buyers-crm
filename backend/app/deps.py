@@ -147,7 +147,7 @@ def get_user_from_api_key(
 
     # Atualiza último uso (não é crítico, mas útil para auditoria)
     api_key.ultimo_uso_em = datetime.now(UTC)
-    db.commit()
+    db.flush()
 
     return user
 

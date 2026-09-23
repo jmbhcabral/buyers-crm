@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.deps import CurrentConsultor, CurrentUser, DbSession, get_optional_consultor
+from app.deps import (
+    ApiKeyUser,
+    CurrentConsultor,
+    CurrentUser,
+    DbSession,
+    get_optional_consultor,
+)
 from app.models import Cliente, Foto, ImovelCanonico, ImovelVersao, ImovelVersaoCliente
 from app.models.consultor import Consultor
 from app.schemas.imovel import (
@@ -15,6 +21,8 @@ from app.schemas.imovel import (
     ImovelVersaoListItem,
     ImovelVersaoUpdate,
 )
+from app.schemas.ingest import ImovelIngestPayload, IngestResult
+from app.services.ingest import ingerir_imovel
 
 router = APIRouter(prefix="/imoveis", tags=["imoveis"])
 
@@ -171,6 +179,19 @@ def _build_detalhe(db: Session, versao: ImovelVersao) -> ImovelVersaoComDetalhes
         },
         canonico=ImovelCanonicoComFotos.model_validate(canonico),
     )
+
+
+@router.post("/ingest", response_model=IngestResult, status_code=status.HTTP_200_OK)
+def ingest_imovel(
+    payload: ImovelIngestPayload,
+    db: DbSession,
+    user: ApiKeyUser,
+) -> IngestResult:
+    """Recebe um imóvel do userscript e faz o ingest.
+
+    Autenticação via header `X-API-Key`.
+    """
+    return ingerir_imovel(db, user, payload)
 
 
 @router.get("/{versao_id}", response_model=ImovelVersaoComDetalhes)
