@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -92,7 +92,11 @@ class ImovelCanonicoHistorico(Base, PKMixin):
 
 
 class Foto(Base, PKMixin, TimestampMixin):
-    """Fotos do imóvel canónico (ficheiros descarregados pelo backend)."""
+    """Fotos do imóvel canónico (ficheiros descarregados pelo backend).
+
+    Suporta soft delete: quando o Idealista remove uma foto, marcamos
+    `ativa=False` em vez de apagar, para preservar histórico.
+    """
 
     __tablename__ = "fotos"
 
@@ -102,6 +106,10 @@ class Foto(Base, PKMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
+
+    # ID da foto no Idealista (multimediaId) — chave natural para dedup
+    idealista_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+
     ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     url_original: Mapped[str | None] = mapped_column(String(1024))
     url_webp: Mapped[str | None] = mapped_column(String(1024))
@@ -111,7 +119,13 @@ class Foto(Base, PKMixin, TimestampMixin):
     tag: Mapped[str | None] = mapped_column(String(64))
     titulo: Mapped[str | None] = mapped_column(String(255))
 
+    # Soft delete
+    ativa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+
     imovel_canonico: Mapped["ImovelCanonico"] = relationship(back_populates="fotos")
 
     def __repr__(self) -> str:
-        return f"<Foto id={self.id} ordem={self.ordem} canonico_id={self.imovel_canonico_id}>"
+        return (
+            f"<Foto id={self.id} idealista_id={self.idealista_id} "
+            f"ordem={self.ordem} ativa={self.ativa}>"
+        )

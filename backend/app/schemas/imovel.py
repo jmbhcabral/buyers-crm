@@ -15,6 +15,7 @@ class FotoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    idealista_id: int | None = None
     ordem: int
     url_original: str | None = None
     url_webp: str | None = None
@@ -23,6 +24,7 @@ class FotoRead(BaseModel):
     altura: int | None = None
     tag: str | None = None
     titulo: str | None = None
+    ativa: bool
 
 
 # ===========================================================================

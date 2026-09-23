@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.deps import CurrentConsultor, CurrentUser, DbSession, get_optional_consultor
-from app.models import Cliente, ImovelCanonico, ImovelVersao, ImovelVersaoCliente
+from app.models import Cliente, Foto, ImovelCanonico, ImovelVersao, ImovelVersaoCliente
 from app.models.consultor import Consultor
 from app.schemas.imovel import (
     ImovelCanonicoComFotos,
@@ -145,6 +145,34 @@ def listar_imoveis(
 # ---------------------------------------------------------------------------
 # Detalhe
 # ---------------------------------------------------------------------------
+def _build_detalhe(db: Session, versao: ImovelVersao) -> ImovelVersaoComDetalhes:
+    """Constrói o payload de detalhe a partir de uma versão já carregada."""
+    canonico = db.scalar(
+        select(ImovelCanonico)
+        .options(
+            selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True)))
+        )
+        .where(ImovelCanonico.id == versao.imovel_canonico_id)
+    )
+    if canonico is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Canónico não encontrado")
+
+    return ImovelVersaoComDetalhes(
+        **{
+            c: getattr(versao, c)
+            for c in [
+                "id", "imovel_canonico_id", "consultor_id",
+                "titulo", "preco", "localizacao", "descricao",
+                "anunciante", "caracteristicas", "caracteristicas_especificas",
+                "telefone", "notas_internas", "campos_alterados",
+                "tem_conflitos", "sincronizado_em",
+                "criado_em", "atualizado_em",
+            ]
+        },
+        canonico=ImovelCanonicoComFotos.model_validate(canonico),
+    )
+
+
 @router.get("/{versao_id}", response_model=ImovelVersaoComDetalhes)
 def obter_imovel(
     versao_id: int,
@@ -154,28 +182,7 @@ def obter_imovel(
 ) -> ImovelVersaoComDetalhes:
     """Devolve a versão + canónico + fotos."""
     versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
-
-    # Carrega canónico com fotos
-    canonico = db.scalar(
-        select(ImovelCanonico)
-        .options(selectinload(ImovelCanonico.fotos))
-        .where(ImovelCanonico.id == versao.imovel_canonico_id)
-    )
-    if canonico is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Canónico não encontrado")
-
-    # Constrói o payload completo
-    return ImovelVersaoComDetalhes(
-        **{c: getattr(versao, c) for c in [
-            "id", "imovel_canonico_id", "consultor_id",
-            "titulo", "preco", "localizacao", "descricao",
-            "anunciante", "caracteristicas", "caracteristicas_especificas",
-            "telefone", "notas_internas", "campos_alterados",
-            "tem_conflitos", "sincronizado_em",
-            "criado_em", "atualizado_em",
-        ]},
-        canonico=ImovelCanonicoComFotos.model_validate(canonico),
-    )
+    return _build_detalhe(db, versao)
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +203,7 @@ def obter_canonico(
 
     canonico = db.scalar(
         select(ImovelCanonico)
-        .options(selectinload(ImovelCanonico.fotos))
+        .options(selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True))))
         .where(ImovelCanonico.id == versao.imovel_canonico_id)
     )
     if canonico is None:
@@ -216,31 +223,21 @@ def atualizar_imovel(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> ImovelVersaoComDetalhes:
-    """Edita campos da versão.
-
-    Marca os campos editados em `campos_alterados` para o merge saber
-    o que respeitar quando o canónico for atualizado.
-    """
+    """Edita campos da versão."""
     versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
 
     data = payload.model_dump(exclude_unset=True)
-    if not data:
-        # Nada para alterar — devolve o estado atual
-        return obter_imovel(versao_id, db, user, consultor)
+    if data:
+        campos_alterados = dict(versao.campos_alterados or {})
+        for campo, valor in data.items():
+            setattr(versao, campo, valor)
+            if campo != "notas_internas":
+                campos_alterados[campo] = True
+        versao.campos_alterados = campos_alterados
+        db.commit()
+        db.refresh(versao)
 
-    # Atualiza os campos + registra quais foram alterados
-    campos_alterados = dict(versao.campos_alterados or {})
-    for campo, valor in data.items():
-        setattr(versao, campo, valor)
-        if campo != "notas_internas":  # notas não contam como "alteração ao Idealista"
-            campos_alterados[campo] = True
-
-    versao.campos_alterados = campos_alterados
-
-    db.commit()
-    db.refresh(versao)
-
-    return obter_imovel(versao_id, db, user, consultor)
+    return _build_detalhe(db, versao)
 
 
 # ---------------------------------------------------------------------------
