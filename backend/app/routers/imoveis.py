@@ -19,6 +19,7 @@ from app.deps import (
 from app.models import Cliente, Foto, ImovelCanonico, ImovelVersao, ImovelVersaoCliente
 from app.models.consultor import Consultor
 from app.schemas.imovel import (
+    ClienteAssociadoRead,
     ImovelCanonicoComFotos,
     ImovelVersaoComDetalhes,
     ImovelVersaoListItem,
@@ -324,3 +325,112 @@ def apagar_imovel(
     versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
     db.delete(versao)
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Clientes associados à versão
+# ---------------------------------------------------------------------------
+@router.post(
+    "/{versao_id}/clientes/{cliente_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def associar_cliente(
+    versao_id: int,
+    cliente_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> None:
+    """Associa um cliente à versão do imóvel.
+
+    Regras:
+    - O user tem de ter acesso à versão.
+    - O user tem de ter acesso ao cliente (via cliente_consultor ou ser admin).
+    """
+    from app.models import ClienteConsultor
+
+    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+
+    # Verificar acesso ao cliente
+    cliente = db.get(Cliente, cliente_id)
+    if cliente is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
+    if not user.is_admin:
+        if consultor is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+        associado = db.scalar(
+            select(ClienteConsultor).where(
+                ClienteConsultor.cliente_id == cliente_id,
+                ClienteConsultor.consultor_id == consultor.id,
+            )
+        )
+        if associado is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
+    # Verificar se já está associado (idempotente)
+    existente = db.scalar(
+        select(ImovelVersaoCliente).where(
+            ImovelVersaoCliente.imovel_versao_id == versao_id,
+            ImovelVersaoCliente.cliente_id == cliente_id,
+        )
+    )
+    if existente is not None:
+        return  # já está associado, não dá erro
+
+    db.add(
+        ImovelVersaoCliente(
+            imovel_versao_id=versao_id,
+            cliente_id=cliente_id,
+        )
+    )
+    db.commit()
+
+
+@router.delete(
+    "/{versao_id}/clientes/{cliente_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def desassociar_cliente(
+    versao_id: int,
+    cliente_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> None:
+    """Remove a associação entre um cliente e uma versão do imóvel."""
+    _obter_versao_com_acesso(db, versao_id, user, consultor)
+
+    assoc = db.scalar(
+        select(ImovelVersaoCliente).where(
+            ImovelVersaoCliente.imovel_versao_id == versao_id,
+            ImovelVersaoCliente.cliente_id == cliente_id,
+        )
+    )
+    if assoc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Associação não encontrada")
+
+    db.delete(assoc)
+    db.commit()
+
+
+@router.get(
+    "/{versao_id}/clientes",
+    response_model=list[ClienteAssociadoRead],
+)
+def listar_clientes_da_versao(
+    versao_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> list[Cliente]:
+    """Lista os clientes associados a uma versão do imóvel."""
+    _obter_versao_com_acesso(db, versao_id, user, consultor)
+
+    stmt = (
+        select(Cliente)
+        .join(ImovelVersaoCliente, ImovelVersaoCliente.cliente_id == Cliente.id)
+        .where(ImovelVersaoCliente.imovel_versao_id == versao_id)
+        .order_by(Cliente.nome)
+    )
+    return list(db.scalars(stmt).all())

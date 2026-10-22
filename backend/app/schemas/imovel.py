@@ -143,3 +143,17 @@ class ImovelVersaoListItem(BaseModel):
     property_id: str
     num_fotos: int = 0
     num_clientes: int = 0
+
+
+# ===========================================================================
+# Cliente associado a uma versão
+# ===========================================================================
+class ClienteAssociadoRead(BaseModel):
+    """Cliente associado a uma versão de imóvel."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nome: str
+    email: str | None = None
+    telefone: str | None = None
