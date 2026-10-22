@@ -1,11 +1,15 @@
 """Endpoints de imóveis (versões do consultor)."""
 
-from typing import Annotated
 from pathlib import Path
+from io import BytesIO
+from typing import Annotated
+
+from app.services.pdf import gerar_pdf
+
 
 from app.services.fotos import descarregar_fotos_do_canonico
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -238,6 +242,77 @@ def obter_ficheiro_foto(
         )
 
     return FileResponse(caminho)
+
+
+@router.get("/{versao_id}/pdf")
+def gerar_pdf_imovel(
+    versao_id: int,
+    cliente_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> StreamingResponse:
+    """Gera o PDF do imóvel para um cliente específico.
+
+    Requer acesso à versão E ao cliente.
+    """
+    from app.models import ClienteConsultor
+    from app.models.consultor import Consultor as ConsultorModel
+
+    # Acesso à versão
+    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+
+    # Acesso ao cliente
+    cliente = db.get(Cliente, cliente_id)
+    if cliente is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+    if not user.is_admin:
+        if consultor is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+        associado = db.scalar(
+            select(ClienteConsultor).where(
+                ClienteConsultor.cliente_id == cliente_id,
+                ClienteConsultor.consultor_id == consultor.id,
+            )
+        )
+        if associado is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
+    # Canónico + fotos (só ativas)
+    canonico = db.scalar(
+        select(ImovelCanonico)
+        .options(selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True))))
+        .where(ImovelCanonico.id == versao.imovel_canonico_id)
+    )
+    if canonico is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Canónico não encontrado")
+
+    # Consultor dono da versão (com user carregado)
+    consultor_dono = db.scalar(
+        select(ConsultorModel)
+        .options(selectinload(ConsultorModel.user))
+        .where(ConsultorModel.id == versao.consultor_id)
+    )
+    if consultor_dono is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Consultor não encontrado")
+
+    # Gerar PDF
+    pdf_bytes = gerar_pdf(
+        versao=versao,
+        canonico=canonico,
+        fotos=list(canonico.fotos),
+        cliente=cliente,
+        consultor=consultor_dono,
+    )
+
+    nome_ficheiro = f"imovel_{canonico.property_id}_{cliente.nome.replace(' ', '_')}.pdf"
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nome_ficheiro}"',
+        },
+    )
 
 
 @router.get("/{versao_id}", response_model=ImovelVersaoComDetalhes)
