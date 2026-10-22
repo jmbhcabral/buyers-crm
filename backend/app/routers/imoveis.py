@@ -1,8 +1,11 @@
 """Endpoints de imóveis (versões do consultor)."""
 
 from typing import Annotated
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.services.fotos import descarregar_fotos_do_canonico
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -184,14 +187,56 @@ def _build_detalhe(db: Session, versao: ImovelVersao) -> ImovelVersaoComDetalhes
 @router.post("/ingest", response_model=IngestResult, status_code=status.HTTP_200_OK)
 def ingest_imovel(
     payload: ImovelIngestPayload,
+    background_tasks: BackgroundTasks,
     db: DbSession,
     user: ApiKeyUser,
 ) -> IngestResult:
     """Recebe um imóvel do userscript e faz o ingest.
 
     Autenticação via header `X-API-Key`.
+    O download de fotos corre em background — a resposta é imediata.
     """
-    return ingerir_imovel(db, user, payload)
+    resultado = ingerir_imovel(db, user, payload)
+
+    # Dispara download de fotos em background
+    if resultado.fotos_novas > 0 or resultado.acao == "criado":
+        background_tasks.add_task(
+            descarregar_fotos_do_canonico,
+            resultado.imovel_canonico_id,
+        )
+
+    return resultado
+
+
+@router.get("/{versao_id}/fotos/{foto_id}")
+def obter_ficheiro_foto(
+    versao_id: int,
+    foto_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> FileResponse:
+    """Serve o ficheiro binário de uma foto (com validação de acesso)."""
+    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+
+    foto = db.get(Foto, foto_id)
+    if foto is None or foto.imovel_canonico_id != versao.imovel_canonico_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto não encontrada")
+
+    if not foto.caminho_local:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Ficheiro ainda não foi descarregado",
+        )
+
+    caminho = Path(foto.caminho_local)
+    if not caminho.exists():
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Ficheiro não encontrado no disco",
+        )
+
+    return FileResponse(caminho)
 
 
 @router.get("/{versao_id}", response_model=ImovelVersaoComDetalhes)
