@@ -245,7 +245,7 @@ def ingerir_imovel(
     """Ponto de entrada do ingest. Ver fluxo no topo do módulo."""
 
     consultor = get_consultor_do_user(db, user)
-    raw_json = payload.model_dump(by_alias=True, exclude_none=False)
+    raw_json = payload.model_dump(by_alias=True, exclude_none=False, mode="json")
 
     # Procurar canónico
     canonico = db.scalar(

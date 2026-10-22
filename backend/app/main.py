@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.middleware import PrivateNetworkAccessMiddleware
 
 from app.config import settings
 from app.routers import api_keys, auth, me, clientes, consultores, imoveis
@@ -22,6 +23,9 @@ if settings.is_dev:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# PNA depois (Starlette aplica por ordem inversa — este é o exterior)
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 
 # --- Routers ---
