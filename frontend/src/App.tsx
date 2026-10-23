@@ -1,20 +1,24 @@
-import { Route, Routes } from 'react-router-dom'
-
-function Home() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-primary/70">
-      <div className="text-center text-primary-foreground">
-        <h1 className="text-5xl font-bold mb-4">Buyers CRM</h1>
-        <p className="text-lg opacity-90">Frontend em construção 🚧</p>
-      </div>
-    </div>
-  )
-}
+import { Route, Routes, Navigate } from 'react-router-dom'
+import { AuthProvider } from '@/lib/auth'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import Login from '@/pages/Login'
+import Home from '@/pages/Home'
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
   )
 }
