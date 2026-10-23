@@ -29,8 +29,8 @@ export default function Sidebar() {
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-white/30 text-gray-600'
-                  : 'text-primary-foreground/80 hover:bg-white/15 hover:text-gray-500',
+                  ? 'bg-white/30 text-white'
+                  : 'text-primary-foreground/80 hover:bg-white/15 hover:text-white',
               )
             }
           >
@@ -52,8 +52,8 @@ export default function Sidebar() {
                 cn(
                   'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-white/30 text-gray-600'
-                    : 'text-primary-foreground/80 hover:bg-white/15 hover:text-gray-500',
+                    ? 'bg-white/30 text-white'
+                    : 'text-primary-foreground/80 hover:bg-white/15 hover:text-white',
                 )
               }
             >
