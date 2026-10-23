@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import Imoveis from '@/pages/Imoveis'
+import ImovelDetalhe from '@/pages/ImovelDetalhe'
 import Clientes from '@/pages/Clientes'
 import Perfil from '@/pages/Perfil'
 
@@ -23,6 +24,7 @@ export default function App() {
         >
           <Route path="/" element={<Dashboard />} />
           <Route path="/imoveis" element={<Imoveis />} />
+          <Route path="/imoveis/:id" element={<ImovelDetalhe />} />
           <Route path="/clientes" element={<Clientes />} />
           <Route path="/perfil" element={<Perfil />} />
         </Route>
