@@ -57,12 +57,34 @@ export default function ImovelDetalhe() {
     )
   }
 
-  function gerarPdf() {
+  async function gerarPdf() {
     if (!clientePdf) return
-    window.open(
-      `/api/imoveis/${versaoId}/pdf?cliente_id=${clientePdf}`,
-      '_blank'
-    )
+
+    try {
+      const resp = await fetch(
+        `/api/imoveis/${versaoId}/pdf?cliente_id=${clientePdf}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        }
+      )
+
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `imovel_${versaoId}_cliente_${clientePdf}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err)
+      alert('Erro ao gerar o PDF. Tenta novamente.')
+    }
   }
 
   return (
