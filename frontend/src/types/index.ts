@@ -108,6 +108,27 @@ export interface ImovelVersao {
   atualizado_em: string
 }
 
+// ===========================================================================
+// Clientes
+// ===========================================================================
+export interface Cliente {
+  id: number
+  nome: string
+  email: string | null
+  telefone: string | null
+  nif: string | null
+  notas: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface ClienteAssociado {
+  id: number
+  nome: string
+  email: string | null
+  telefone: string | null
+}
+
 export interface ImovelVersaoComDetalhes extends ImovelVersao {
   canonico: ImovelCanonico
 }
