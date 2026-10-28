@@ -150,3 +150,19 @@ export interface PdfGeradoComContexto extends PdfGerado {
   imovel_property_id: string
   cliente_nome: string
 }
+
+// ===========================================================================
+// API Keys
+// ===========================================================================
+export interface ApiKey {
+  id: number
+  nome: string
+  prefixo: string
+  ativa: boolean
+  ultimo_uso_em: string | null
+  criado_em: string
+}
+
+export interface ApiKeyCreated extends ApiKey {
+  chave: string
+}
