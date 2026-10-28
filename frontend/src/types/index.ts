@@ -196,3 +196,79 @@ export interface PdfRecente {
   criado_em: string
   tamanho_bytes: number
 }
+
+// ===========================================================================
+// Admin
+// ===========================================================================
+export interface AdminStats {
+  total_users: number
+  total_consultores: number
+  total_clientes: number
+  total_canonicos: number
+  total_versoes: number
+  total_pdfs: number
+  total_historico: number
+  ingest_ultimos_7_dias: number
+  pdfs_ultimos_7_dias: number
+}
+
+export interface AdminConsultor {
+  id: number
+  user_id: number
+  nome: string
+  email: string
+  is_admin: boolean
+  ativo: boolean
+  telefone: string | null
+  criado_em: string
+  num_imoveis: number
+  num_clientes: number
+  num_pdfs: number
+}
+
+export interface AdminCanonico {
+  id: number
+  property_id: string
+  titulo: string | null
+  preco: string | null
+  localizacao: string[] | null
+  url: string | null
+  criado_em: string
+  extraido_em: string
+  num_fotos: number
+  num_versoes: number
+}
+
+export interface AdminVersao {
+  id: number
+  imovel_canonico_id: number
+  property_id: string
+  titulo: string | null
+  preco: string | null
+  consultor_id: number
+  consultor_nome: string
+  consultor_email: string
+  tem_conflitos: boolean
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface AdminHistorico {
+  id: number
+  imovel_canonico_id: number
+  property_id: string
+  imovel_titulo: string | null
+  capturado_em: string
+}
+
+export interface AdminPdf {
+  id: number
+  imovel_versao_id: number
+  imovel_titulo: string | null
+  property_id: string
+  cliente_nome: string
+  consultor_id: number
+  consultor_nome: string
+  tamanho_bytes: number
+  criado_em: string
+}
