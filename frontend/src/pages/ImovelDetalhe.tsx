@@ -157,7 +157,7 @@ export default function ImovelDetalhe() {
       {/* Grid principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <FormImovel imovel={imovel} />
+          <FormImovel key={imovel.id} imovel={imovel} />
           <GaleriaFotos fotos={imovel.canonico.fotos ?? []} imovelId={versaoId} />
         </div>
 

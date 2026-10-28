@@ -4,11 +4,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.deps import CurrentUser, DbSession, get_optional_consultor
 from app.models import Cliente, ClienteConsultor, Consultor, User
 from app.schemas.cliente import ClienteCreate, ClienteRead, ClienteUpdate
+from app.models import ImovelCanonico, ImovelVersao, ImovelVersaoCliente
+from app.schemas.imovel import ImovelVersaoListItem
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -161,3 +163,74 @@ def apagar_cliente(
     cliente = _obter_cliente_com_acesso(db, cliente_id, user, consultor)
     db.delete(cliente)
     db.commit()
+
+
+@router.get("/{cliente_id}/imoveis", response_model=list[ImovelVersaoListItem])
+def listar_imoveis_do_cliente(
+    cliente_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> list[ImovelVersaoListItem]:
+    """Lista os imóveis associados a um cliente."""
+    from app.models import ImovelCanonico, ImovelVersao, ImovelVersaoCliente
+    from app.schemas.imovel import ImovelVersaoListItem
+
+    # Acesso ao cliente (usa a mesma lógica do get_cliente)
+    from app.routers.clientes import _obter_cliente_com_acesso
+
+    _obter_cliente_com_acesso(db, cliente_id, user, consultor)
+
+    # Versões onde o cliente está associado
+    versao_ids = db.scalars(
+        select(ImovelVersaoCliente.imovel_versao_id).where(
+            ImovelVersaoCliente.cliente_id == cliente_id
+        )
+    ).all()
+
+    if not versao_ids:
+        return []
+
+    versoes = db.scalars(
+        select(ImovelVersao)
+        .options(selectinload(ImovelVersao.canonico))
+        .where(ImovelVersao.id.in_(versao_ids))
+        .order_by(ImovelVersao.atualizado_em.desc())
+    ).all()
+
+    # Contagens
+    canonico_ids = [v.imovel_canonico_id for v in versoes]
+
+    contagem_fotos = dict(
+        db.execute(
+            select(ImovelCanonico.id, func.count())
+            .join(ImovelCanonico.fotos)
+            .where(ImovelCanonico.id.in_(canonico_ids))
+            .group_by(ImovelCanonico.id)
+        ).all()
+    )
+
+    contagem_clientes = dict(
+        db.execute(
+            select(ImovelVersaoCliente.imovel_versao_id, func.count())
+            .where(ImovelVersaoCliente.imovel_versao_id.in_([v.id for v in versoes]))
+            .group_by(ImovelVersaoCliente.imovel_versao_id)
+        ).all()
+    )
+
+    return [
+        ImovelVersaoListItem(
+            id=v.id,
+            imovel_canonico_id=v.imovel_canonico_id,
+            titulo=v.titulo,
+            preco=v.preco,
+            localizacao=v.localizacao,
+            tem_conflitos=v.tem_conflitos,
+            atualizado_em=v.atualizado_em,
+            criado_em=v.criado_em,
+            property_id=v.canonico.property_id,
+            num_fotos=contagem_fotos.get(v.imovel_canonico_id, 0),
+            num_clientes=contagem_clientes.get(v.id, 0),
+        )
+        for v in versoes
+    ]

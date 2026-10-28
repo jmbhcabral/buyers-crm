@@ -9,6 +9,7 @@ import ImovelDetalhe from '@/pages/ImovelDetalhe'
 import Clientes from '@/pages/Clientes'
 import Perfil from '@/pages/Perfil'
 import Pdfs from './pages/Pdfs'
+import ClienteDetalhe from './pages/ClienteDetalhe'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/imoveis" element={<Imoveis />} />
           <Route path="/imoveis/:id" element={<ImovelDetalhe />} />
           <Route path="/clientes" element={<Clientes />} />
+          <Route path="/clientes/:id" element={<ClienteDetalhe />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/pdfs" element={<Pdfs />} />
         </Route>

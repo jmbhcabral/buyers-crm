@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,22 +14,16 @@ interface Props {
 export default function FormImovel({ imovel }: Props) {
   const mutation = useUpdateImovel(imovel.id)
 
-  const [titulo, setTitulo] = useState('')
-  const [preco, setPreco] = useState('')
-  const [localizacao, setLocalizacao] = useState('')
-  const [descricao, setDescricao] = useState('')
-  const [anunciante, setAnunciante] = useState('')
-  const [notas, setNotas] = useState('')
-
-  // Carrega os dados iniciais quando o imóvel muda
-  useEffect(() => {
-    setTitulo(imovel.titulo ?? '')
-    setPreco(imovel.preco ?? '')
-    setLocalizacao((imovel.localizacao ?? []).join(', '))
-    setDescricao(imovel.descricao ?? '')
-    setAnunciante(imovel.anunciante ?? '')
-    setNotas(imovel.notas_internas ?? '')
-  }, [imovel])
+  // Inicialização direta — sem useEffect.
+  // O pai passa `key={imovel.id}` para forçar remount quando o imóvel muda.
+  const [titulo, setTitulo] = useState(imovel.titulo ?? '')
+  const [preco, setPreco] = useState(imovel.preco ?? '')
+  const [localizacao, setLocalizacao] = useState(
+    (imovel.localizacao ?? []).join(', ')
+  )
+  const [descricao, setDescricao] = useState(imovel.descricao ?? '')
+  const [anunciante, setAnunciante] = useState(imovel.anunciante ?? '')
+  const [notas, setNotas] = useState(imovel.notas_internas ?? '')
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
