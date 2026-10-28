@@ -36,10 +36,11 @@ services:
       ENV: dev
       LOG_LEVEL: INFO
     ports:
-      - "${BACKEND_PORT:-8000}:8000"      # <-- ADICIONA ISTO
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
       - fotos_storage:/app/storage/fotos
+      - pdfs_storage:/app/storage/pdfs
     command: >
       sh -c "
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -48,3 +49,4 @@ services:
 volumes:
   postgres_data:
   fotos_storage:
+  pdfs_storage:

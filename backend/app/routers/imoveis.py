@@ -29,8 +29,10 @@ from app.schemas.imovel import (
     ImovelVersaoListItem,
     ImovelVersaoUpdate,
 )
+from app.schemas.pdf import PdfGeradoRead
 from app.schemas.ingest import ImovelIngestPayload, IngestResult
 from app.services.ingest import ingerir_imovel
+from app.services.pdf_storage import gerar_e_guardar_pdf
 
 router = APIRouter(prefix="/imoveis", tags=["imoveis"])
 
@@ -244,28 +246,25 @@ def obter_ficheiro_foto(
     return FileResponse(caminho)
 
 
-@router.get("/{versao_id}/pdf")
+@router.post("/{versao_id}/pdf", response_model=PdfGeradoRead, status_code=status.HTTP_201_CREATED)
 def gerar_pdf_imovel(
     versao_id: int,
     cliente_id: int,
     db: DbSession,
     user: CurrentUser,
     consultor: ConsultorOpcional,
-) -> StreamingResponse:
-    """Gera o PDF do imóvel para um cliente específico.
+) -> PdfGeradoRead:
+    """Gera um PDF do imóvel para um cliente.
 
-    Requer acesso à versão E ao cliente.
+    Substitui o anterior se já existir para esta versão+cliente.
     """
     from app.models import ClienteConsultor
-    from app.models.consultor import Consultor as ConsultorModel
 
-    # Acesso à versão
     versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
-
-    # Acesso ao cliente
     cliente = db.get(Cliente, cliente_id)
     if cliente is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
     if not user.is_admin:
         if consultor is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
@@ -278,41 +277,8 @@ def gerar_pdf_imovel(
         if associado is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
-    # Canónico + fotos (só ativas)
-    canonico = db.scalar(
-        select(ImovelCanonico)
-        .options(selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True))))
-        .where(ImovelCanonico.id == versao.imovel_canonico_id)
-    )
-    if canonico is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Canónico não encontrado")
-
-    # Consultor dono da versão (com user carregado)
-    consultor_dono = db.scalar(
-        select(ConsultorModel)
-        .options(selectinload(ConsultorModel.user))
-        .where(ConsultorModel.id == versao.consultor_id)
-    )
-    if consultor_dono is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Consultor não encontrado")
-
-    # Gerar PDF
-    pdf_bytes = gerar_pdf(
-        versao=versao,
-        canonico=canonico,
-        fotos=list(canonico.fotos),
-        cliente=cliente,
-        consultor=consultor_dono,
-    )
-
-    nome_ficheiro = f"imovel_{canonico.property_id}_{cliente.nome.replace(' ', '_')}.pdf"
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{nome_ficheiro}"',
-        },
-    )
+    pdf = gerar_e_guardar_pdf(db, versao, cliente)
+    return PdfGeradoRead.model_validate(pdf)
 
 
 @router.get("/{versao_id}", response_model=ImovelVersaoComDetalhes)

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -120,7 +120,7 @@ class Foto(Base, PKMixin, TimestampMixin):
     titulo: Mapped[str | None] = mapped_column(String(255))
 
     # Soft delete
-    ativa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    ativa: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False, index=True)
 
     imovel_canonico: Mapped["ImovelCanonico"] = relationship(back_populates="fotos")
 
