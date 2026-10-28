@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Loader2,
   Search,
@@ -19,6 +20,7 @@ import {
   Trash2,
   Calendar,
 } from 'lucide-react'
+import { notify } from '@/lib/toast'
 
 function formatarTamanho(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -28,21 +30,33 @@ function formatarTamanho(bytes: number): string {
 
 export default function Pdfs() {
   const [pesquisa, setPesquisa] = useState('')
+  const [aApagar, setAApagar] = useState<number | null>(null)
   const { data: pdfs, isLoading } = usePdfs({ q: pesquisa || undefined })
   const apagar = useApagarPdf()
 
   async function handleDownload(pdfId: number, nome: string) {
     try {
       await descarregarPdf(pdfId, nome)
+      notify.sucesso('PDF descarregado.')
     } catch (err) {
       console.error('Erro ao descarregar PDF:', err)
-      alert('Erro ao descarregar o PDF.')
+      notify.erro('Erro ao descarregar o PDF.')
     }
   }
 
   function handleApagar(pdfId: number) {
-    if (!confirm('Apagar este PDF?')) return
-    apagar.mutate(pdfId)
+    setAApagar(pdfId)
+  }
+
+  function confirmarApagar() {
+    if (aApagar === null) return
+    apagar.mutate(aApagar, {
+      onSuccess: () => {
+        notify.sucesso('PDF apagado.')
+        setAApagar(null)
+      },
+      onError: () => notify.erro('Erro ao apagar o PDF.'),
+    })
   }
 
   return (
@@ -142,6 +156,15 @@ export default function Pdfs() {
           </Table>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={aApagar !== null}
+        onOpenChange={(open) => !open && setAApagar(null)}
+        titulo="Apagar PDF?"
+        descricao="O ficheiro é removido do servidor e não pode ser recuperado."
+        textoConfirmar="Apagar"
+        onConfirm={confirmarApagar}
+      />
     </div>
   )
 }

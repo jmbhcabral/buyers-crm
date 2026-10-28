@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2, Copy, Check } from 'lucide-react'
 import { useCriarApiKey } from '@/hooks/use-api-keys'
 import type { ApiKeyCreated } from '@/types'
+import { notify } from '@/lib/toast'
 
 interface Props {
   open: boolean
@@ -38,9 +39,10 @@ export default function DialogNovaApiKey({ open, onOpenChange }: Props) {
     try {
       const api_key = await criar.mutateAsync(nome.trim())
       setCriada(api_key)
+      notify.sucesso('API key criada. Copia-a agora.')
     } catch (err) {
       console.error('Erro ao criar API key:', err)
-      alert('Erro ao criar API key.')
+      notify.erro('Erro ao criar API key.')
     }
   }
 
@@ -49,9 +51,10 @@ export default function DialogNovaApiKey({ open, onOpenChange }: Props) {
     try {
       await navigator.clipboard.writeText(criada.chave)
       setCopiada(true)
+      notify.sucesso('Chave copiada para a área de transferência.')
       setTimeout(() => setCopiada(false), 2000)
     } catch {
-      alert('Não consegui copiar. Copia manualmente.')
+      notify.erro('Não consegui copiar. Copia manualmente.')
     }
   }
 

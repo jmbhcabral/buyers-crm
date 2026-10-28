@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Save } from 'lucide-react'
 import { useAtualizarConsultor } from '@/hooks/use-consultor'
 import type { Consultor } from '@/types'
+import { notify } from '@/lib/toast'
 
 interface Props {
   consultor: Consultor
@@ -24,6 +25,9 @@ export default function FormConsultor({ consultor }: Props) {
       telefone: telefone || null,
       nif: nif || null,
       bio: bio || null,
+    }, {
+      onSuccess: () => notify.sucesso('Consultor atualizado.'),
+      onError: () => notify.erro('Erro ao atualizar consultor.'),
     })
   }
 

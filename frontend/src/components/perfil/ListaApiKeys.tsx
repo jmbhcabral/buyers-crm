@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Loader2,
   Key,
@@ -12,15 +13,27 @@ import {
 } from 'lucide-react'
 import { useApiKeys, useRevogarApiKey } from '@/hooks/use-api-keys'
 import DialogNovaApiKey from './DialogNovaApiKey'
+import { notify } from '@/lib/toast'
 
 export default function ListaApiKeys() {
   const { data: apiKeys, isLoading } = useApiKeys()
   const revogar = useRevogarApiKey()
   const [dialogAberto, setDialogAberto] = useState(false)
+  const [aRevogar, setARevogar] = useState<{ id: number; nome: string } | null>(null)
 
   function handleRevogar(id: number, nome: string) {
-    if (!confirm(`Revogar a API key "${nome}"? Esta ação é irreversível.`)) return
-    revogar.mutate(id)
+    setARevogar({ id, nome })
+  }
+
+  function confirmarRevogar() {
+    if (!aRevogar) return
+    revogar.mutate(aRevogar.id, {
+      onSuccess: () => {
+        notify.sucesso('API key revogada.')
+        setARevogar(null)
+      },
+      onError: () => notify.erro('Erro ao revogar.'),
+    })
   }
 
   return (
@@ -111,6 +124,19 @@ export default function ListaApiKeys() {
       </Card>
 
       <DialogNovaApiKey open={dialogAberto} onOpenChange={setDialogAberto} />
+
+      <ConfirmDialog
+        open={!!aRevogar}
+        onOpenChange={(open) => !open && setARevogar(null)}
+        titulo="Revogar API key?"
+        descricao={
+          aRevogar
+            ? `A chave "${aRevogar.nome}" deixa de funcionar imediatamente. Esta ação é irreversível.`
+            : ''
+        }
+        textoConfirmar="Revogar"
+        onConfirm={confirmarRevogar}
+      />
     </>
   )
 }

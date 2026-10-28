@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 import { useCriarCliente } from '@/hooks/use-clientes'
+import { notify } from '@/lib/toast'
 
 interface Props {
   open: boolean
@@ -48,9 +49,10 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
       })
       reset()
       onOpenChange(false)
+      notify.sucesso('Cliente criado!')
     } catch (err) {
       console.error('Erro ao criar cliente:', err)
-      alert('Erro ao criar cliente.')
+      notify.erro('Erro ao criar cliente.')
     }
   }
 

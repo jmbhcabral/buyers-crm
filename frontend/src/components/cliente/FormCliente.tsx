@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Save } from 'lucide-react'
 import { useAtualizarCliente } from '@/hooks/use-clientes'
 import type { Cliente } from '@/types'
+import { notify } from '@/lib/toast'
 
 interface Props {
   cliente: Cliente
@@ -31,6 +32,9 @@ export default function FormCliente({ cliente }: Props) {
       telefone: telefone || null,
       nif: nif || null,
       notas: notas || null,
+    }, {
+      onSuccess: () => notify.sucesso('Cliente atualizado.'),
+      onError: () => notify.erro('Erro ao atualizar cliente.'),
     })
   }
 

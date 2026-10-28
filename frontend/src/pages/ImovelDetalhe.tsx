@@ -26,6 +26,7 @@ import FormImovel from '@/components/imovel/FormImovel'
 import SnapshotCanonico from '@/components/imovel/SnapshotCanonico'
 import GaleriaFotos from '@/components/imovel/GaleriaFotos'
 import ClientesAssociados from '@/components/imovel/ClientesAssociados'
+import { notify } from '@/lib/toast'
 
 export default function ImovelDetalhe() {
   const { id } = useParams()
@@ -68,10 +69,11 @@ export default function ImovelDetalhe() {
     if (!clientePdf) return
     try {
       const pdf = await gerar.mutateAsync(Number(clientePdf))
+      notify.sucesso('PDF gerado com sucesso!')
       await descarregarPdf(pdf.id, pdf.nome_ficheiro)
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
-      alert('Erro ao gerar o PDF. Tenta novamente.')
+      notify.erro('Erro ao gerar o PDF. Tenta novamente.')
     }
   }
 

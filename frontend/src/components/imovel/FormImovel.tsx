@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Save } from 'lucide-react'
 import { useUpdateImovel } from '@/hooks/use-mutations-imovel'
 import type { ImovelVersaoComDetalhes } from '@/types'
+import { notify } from '@/lib/toast'
 
 interface Props {
   imovel: ImovelVersaoComDetalhes
@@ -36,6 +37,9 @@ export default function FormImovel({ imovel }: Props) {
       descricao: descricao || null,
       anunciante: anunciante || null,
       notas_internas: notas || null,
+    }, {
+      onSuccess: () => notify.sucesso('Imóvel atualizado.'),
+      onError: () => notify.erro('Erro ao atualizar imóvel.'),
     })
   }
 
