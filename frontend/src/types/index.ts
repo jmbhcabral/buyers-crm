@@ -166,3 +166,33 @@ export interface ApiKey {
 export interface ApiKeyCreated extends ApiKey {
   chave: string
 }
+
+// ===========================================================================
+// Dashboard
+// ===========================================================================
+export interface DashboardStats {
+  total_imoveis: number
+  total_clientes: number
+  total_pdfs: number
+  imoveis_com_conflitos: number
+  imoveis_sem_cliente: number
+  pdfs_ultimos_30_dias: number
+}
+
+export interface ImovelRecente {
+  id: number
+  titulo: string | null
+  preco: string | null
+  property_id: string
+  criado_em: string
+  tem_conflitos: boolean
+}
+
+export interface PdfRecente {
+  id: number
+  imovel_versao_id: number
+  imovel_titulo: string | null
+  cliente_nome: string
+  criado_em: string
+  tamanho_bytes: number
+}
