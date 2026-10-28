@@ -132,3 +132,21 @@ export interface ClienteAssociado {
 export interface ImovelVersaoComDetalhes extends ImovelVersao {
   canonico: ImovelCanonico
 }
+
+// ===========================================================================
+// PDFs
+// ===========================================================================
+export interface PdfGerado {
+  id: number
+  imovel_versao_id: number
+  cliente_id: number
+  nome_ficheiro: string
+  tamanho_bytes: number
+  criado_em: string
+}
+
+export interface PdfGeradoComContexto extends PdfGerado {
+  imovel_titulo: string | null
+  imovel_property_id: string
+  cliente_nome: string
+}

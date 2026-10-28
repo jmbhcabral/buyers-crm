@@ -8,6 +8,7 @@ import Imoveis from '@/pages/Imoveis'
 import ImovelDetalhe from '@/pages/ImovelDetalhe'
 import Clientes from '@/pages/Clientes'
 import Perfil from '@/pages/Perfil'
+import Pdfs from './pages/Pdfs'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/imoveis/:id" element={<ImovelDetalhe />} />
           <Route path="/clientes" element={<Clientes />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/pdfs" element={<Pdfs />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
