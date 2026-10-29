@@ -56,7 +56,7 @@ export function useApagarPdf() {
  * Descarrega um PDF com Bearer token (o endpoint requer auth).
  * Abre numa nova aba via Blob URL.
  */
-export async function descarregarPdf(pdfId: number, nomeFicheiro: string) {
+export async function descarregarPdf(pdfId: number, _nomeFicheiro: string) {
   const resp = await fetch(`/api/pdfs/${pdfId}`, {
     headers: {
       Authorization: `Bearer ${localStorage.getItem('access_token')}`,
