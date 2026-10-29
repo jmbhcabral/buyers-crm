@@ -22,3 +22,7 @@ backend/storage/fotos/*
 .vscode/
 .idea/
 .DS_Store
+# Produção
+.env
+.env.prod
+.env.local
