@@ -6,6 +6,7 @@ from app.models.cliente import Cliente
 from app.models.consultor import Consultor
 from app.models.imovel_canonico import Foto, ImovelCanonico, ImovelCanonicoHistorico
 from app.models.imovel_versao import ImovelVersao
+from app.models.link_cliente import LinkAcesso, LinkCliente, LinkImovel
 from app.models.pdf_gerado import PdfGerado
 from app.models.user import User
 
@@ -19,6 +20,9 @@ __all__ = [
     "ImovelCanonicoHistorico",
     "ImovelVersao",
     "ImovelVersaoCliente",
+    "LinkAcesso",
+    "LinkCliente",
+    "LinkImovel",
     "PdfGerado",
     "User",
 ]
