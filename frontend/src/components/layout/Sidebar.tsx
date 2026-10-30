@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Building2, Users, LayoutDashboard, User, Shield, FileText } from 'lucide-react'
+import { Building2, Users, LayoutDashboard, Link2,  User, Shield, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/use-auth'
 
@@ -7,6 +7,7 @@ const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/imoveis', label: 'Imóveis', icon: Building2 },
   { to: '/clientes', label: 'Clientes', icon: Users },
+  { to: '/links', label: 'Links', icon: Link2 },
   { to: '/pdfs', label: 'PDFs', icon: FileText },
   { to: '/perfil', label: 'Perfil', icon: User },
 ]

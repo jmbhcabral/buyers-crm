@@ -85,7 +85,12 @@ export function ListaPage() {
       </div>
       <div className="space-y-4">
         {data.imoveis.map((imovel) => (
-          <CardImovel key={imovel.imovel_versao_id} token={token!} imovel={imovel} />
+          <CardImovel
+            key={imovel.imovel_versao_id}
+            token={token!}
+            imovel={imovel}
+            fotoUrl={imovel.primeira_foto_url ?? undefined}
+          />
         ))}
       </div>
     </Layout>

@@ -272,3 +272,65 @@ export interface AdminPdf {
   tamanho_bytes: number
   criado_em: string
 }
+
+
+// ===========================================================================
+// Links de cliente
+// ===========================================================================
+export interface Link {
+  id: number
+  cliente_id: number
+  consultor_id: number
+  token_prefix: string
+  token_visible: string | null
+  url_publica: string | null
+  ativo: boolean
+  expira_em: string
+  revogado_em: string | null
+  ultimo_acesso_em: string | null
+  criado_em: string
+  atualizado_em: string
+  cliente_nome: string
+  num_imoveis: number
+  num_acessos: number
+}
+
+export interface LinkImovel {
+  imovel_versao_id: number
+  ordem: number
+  titulo: string | null
+  preco: string | null
+  localizacao: string[] | null
+  num_fotos: number
+  criado_em: string
+}
+
+export interface LinkComDetalhes extends Link {
+  imoveis: LinkImovel[]
+}
+
+export interface LinkAcesso {
+  id: number
+  imovel_versao_id: number | null
+  imovel_titulo: string | null
+  user_agent: string | null
+  referrer: string | null
+  criado_em: string
+}
+
+export interface ImovelAnalytics {
+  imovel_versao_id: number
+  imovel_titulo: string | null
+  num_acessos: number
+  ultimo_acesso_em: string | null
+}
+
+export interface LinkAnalytics {
+  link_id: number
+  num_acessos_total: number
+  num_acessos_lista: number
+  num_acessos_detalhe: number
+  ultimo_acesso_em: string | null
+  por_imovel: ImovelAnalytics[]
+  acessos_recentes: LinkAcesso[]
+}

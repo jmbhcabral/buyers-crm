@@ -48,17 +48,18 @@ class LinkRead(BaseModel):
     num_imoveis: int = 0
     num_acessos: int = 0
 
+    url_publica: str | None = None
+    token_visible: str | None = None
+
 
 class LinkCreated(LinkRead):
     """Devolvido APENAS no POST. Inclui URL completa."""
 
     token: str
-    url_publica: str
 
 
 class LinkComDetalhes(LinkRead):
     imoveis: list[LinkImovelRead] = []
-    url_publica: str  # sempre visível neste endpoint
 
 
 class LinkAcessoRead(BaseModel):

@@ -126,7 +126,7 @@ def _validar_imovel_no_link(db: DbSession, link: LinkCliente, versao_id: int) ->
 def obter_link_publico(
     token: str,
     request: Request,
-    response: Response, 
+    response: Response,
     db: DbSession,
 ) -> PublicLinkResponse:
     """Lista os imóveis do link do cliente. Regista um acesso à lista."""
@@ -143,28 +143,49 @@ def obter_link_publico(
     ).all()
 
     canonico_ids = [c.id for _, _, c in rows]
+    contagem_fotos: dict[int, int] = {}
+    primeira_foto: dict[int, int] = {}
+
     if canonico_ids:
-        contagem = dict(
+        # 1. Contagem de fotos ativas por canónico
+        contagem_fotos = dict(
             db.execute(
                 select(Foto.imovel_canonico_id, func.count())
                 .where(Foto.imovel_canonico_id.in_(canonico_ids), Foto.ativa.is_(True))
                 .group_by(Foto.imovel_canonico_id)
             ).all()
         )
-    else:
-        contagem = {}
 
-    imoveis_out = [
-        PublicImovelItem(
-            imovel_versao_id=li.imovel_versao_id,
-            ordem=li.ordem,
-            titulo=v.titulo,
-            preco=v.preco,
-            localizacao=v.localizacao,
-            num_fotos=contagem.get(c.id, 0),
+        # 2. Primeira foto (ordem menor) de cada canónico
+        fotos_ordenadas = db.scalars(
+            select(Foto)
+            .where(Foto.imovel_canonico_id.in_(canonico_ids), Foto.ativa.is_(True))
+            .order_by(Foto.imovel_canonico_id, Foto.ordem)
+        ).all()
+        for f in fotos_ordenadas:
+            if f.imovel_canonico_id not in primeira_foto:
+                primeira_foto[f.imovel_canonico_id] = f.id
+
+    # Construir a resposta
+    imoveis_out: list[PublicImovelItem] = []
+    for li, v, c in rows:
+        foto_id = primeira_foto.get(c.id)
+        foto_url = (
+            f"/api/public/links/{token}/imoveis/{li.imovel_versao_id}/fotos/{foto_id}"
+            if foto_id is not None
+            else None
         )
-        for li, v, c in rows
-    ]
+        imoveis_out.append(
+            PublicImovelItem(
+                imovel_versao_id=li.imovel_versao_id,
+                ordem=li.ordem,
+                titulo=v.titulo,
+                preco=v.preco,
+                localizacao=v.localizacao,
+                num_fotos=contagem_fotos.get(c.id, 0),
+                primeira_foto_url=foto_url,
+            )
+        )
 
     _registar_acesso(db, link, request, imovel_versao_id=None)
 
@@ -175,7 +196,6 @@ def obter_link_publico(
         ),
         imoveis=imoveis_out,
     )
-
 
 # ---------------------------------------------------------------------------
 # GET /api/public/links/{token}/imoveis/{versao_id}

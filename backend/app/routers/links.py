@@ -96,6 +96,8 @@ def _build_link_read(db: DbSession, link: LinkCliente, cliente_nome: str) -> dic
         "cliente_nome": cliente_nome,
         "num_imoveis": _contar_imoveis(db, link.id),
         "num_acessos": _contar_acessos(db, link.id),
+        "url_publica": _url_publica(link.token_visible),
+        "token_visible": link.token_visible,
     }
 
 
@@ -148,7 +150,6 @@ def criar_link(
         return LinkCreated(
             **_build_link_read(db, existente, cliente.nome),
             token=existente.token_visible,
-            url_publica=_url_publica(existente.token_visible),
         )
 
     # Criar novo
@@ -171,7 +172,6 @@ def criar_link(
     return LinkCreated(
         **_build_link_read(db, link, cliente.nome),
         token=token,
-        url_publica=_url_publica(token),
     )
 
 
@@ -253,7 +253,6 @@ def _build_link_detalhes(db: DbSession, link: LinkCliente) -> LinkComDetalhes:
     return LinkComDetalhes(
         **_build_link_read(db, link, link.cliente.nome),
         imoveis=imoveis_out,
-        url_publica=_url_publica(link.token_visible),
     )
 
 

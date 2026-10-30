@@ -12,6 +12,7 @@ import Perfil from '@/pages/Perfil'
 import Pdfs from './pages/Pdfs'
 import ClienteDetalhe from './pages/ClienteDetalhe'
 import Admin from './pages/Admin'
+import Links from '@/pages/Links'
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
     const { user } = useAuth()
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/imoveis/:id" element={<ImovelDetalhe />} />
           <Route path="/clientes" element={<Clientes />} />
           <Route path="/clientes/:id" element={<ClienteDetalhe />} />
+          <Route path="/links" element={<Links />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/pdfs" element={<Pdfs />} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />

@@ -10,6 +10,7 @@ export interface PublicImovelItem {
   preco: string | null
   localizacao: string[] | null
   num_fotos: number
+  primeira_foto_url: string | null
 }
 
 export interface PublicLinkResponse {

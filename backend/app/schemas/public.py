@@ -20,6 +20,7 @@ class PublicImovelItem(BaseModel):
     preco: str | None = None
     localizacao: list[Any] | None = None
     num_fotos: int = 0
+    primeira_foto_url: str | None = None
 
 
 # --- Resposta da lista ---
