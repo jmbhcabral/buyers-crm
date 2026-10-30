@@ -5,7 +5,7 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -32,6 +32,17 @@ from app.security import hash_link_token
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/public/links", tags=["public"])
+
+def _no_cache(response: Response) -> None:
+    """Obriga o browser a não cachear respostas públicas.
+
+    Essencial: se o link for revogado, o browser não deve continuar a servir
+    a versão em cache. Também evita que um 410 fique cacheado e "cole" mesmo
+    depois de renovar o link.
+    """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
 
 
 # ---------------------------------------------------------------------------
@@ -115,9 +126,11 @@ def _validar_imovel_no_link(db: DbSession, link: LinkCliente, versao_id: int) ->
 def obter_link_publico(
     token: str,
     request: Request,
+    response: Response, 
     db: DbSession,
 ) -> PublicLinkResponse:
     """Lista os imóveis do link do cliente. Regista um acesso à lista."""
+    _no_cache(response)
     link = _obter_link_valido(db, token)
 
     # Buscar imóveis do link (ordenados)
@@ -172,9 +185,11 @@ def obter_imovel_publico(
     token: str,
     versao_id: int,
     request: Request,
+    response: Response,
     db: DbSession,
 ) -> PublicImovelDetalhe:
     """Detalhe completo de um imóvel do link. Regista um acesso ao imóvel."""
+    _no_cache(response)
     link = _obter_link_valido(db, token)
     versao = _validar_imovel_no_link(db, link, versao_id)
 
@@ -225,8 +240,10 @@ def obter_foto_publica(
     versao_id: int,
     foto_id: int,
     db: DbSession,
+    response: Response,
 ) -> FileResponse:
     """Serve o ficheiro JPEG de uma foto do imóvel do link."""
+    _no_cache(response)
     link = _obter_link_valido(db, token)
     versao = _validar_imovel_no_link(db, link, versao_id)
 
