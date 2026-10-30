@@ -17,10 +17,25 @@ app = FastAPI(
 if settings.is_dev:
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=".*",     # aceita qualquer origem em dev
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+else:
+    # Em prod, só aceita o Idealista (userscript) e o próprio CRM
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "https://www.idealista.pt",
+            "https://idealista.pt",
+            "https://crm.chanilaicastro.pt",
+            "https://imoveis.chanilaicastro.pt",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
     )
 
 # PNA depois (Starlette aplica por ordem inversa — este é o exterior)

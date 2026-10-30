@@ -19,7 +19,7 @@
     // ============================================
     // CONFIG
     // ============================================
-    const API_BASE = 'http://localhost:8000';   // <-- muda em produção
+    const API_BASE = 'https://crm.chanilaicastro.pt';
     const CHAVE_API_KEY = 'buyers_crm_api_key';
     const CHAVE_HISTORICO = 'buyers_crm_historico';
 
