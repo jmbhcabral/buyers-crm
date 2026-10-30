@@ -13,6 +13,8 @@ import bcrypt
 from jose import JWTError, jwt
 
 from app.config import settings
+import hashlib
+import secrets
 
 # ---------------------------------------------------------------------------
 # Password hashing (bcrypt direto)
@@ -122,3 +124,25 @@ def hash_api_key(api_key: str) -> str:
     entropia suficiente e precisamos de lookup rápido por igualdade.
     """
     return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Link tokens (para links de cliente)
+# ---------------------------------------------------------------------------
+LINK_TOKEN_PREFIX = "lk_"
+LINK_TOKEN_BYTES = 32
+
+
+def generate_link_token() -> tuple[str, str, str]:
+    """Gera um token de link de cliente.
+
+    Devolve (token_completo, hash_sha256, prefixo_12_chars).
+    """
+    raw = secrets.token_urlsafe(LINK_TOKEN_BYTES)
+    full = f"{LINK_TOKEN_PREFIX}{raw}"
+    return full, hashlib.sha256(full.encode()).hexdigest(), full[:12]
+
+
+def hash_link_token(token: str) -> str:
+    """Hash SHA-256 de um token de link (para lookup em /s/{token})."""
+    return hashlib.sha256(token.encode()).hexdigest()

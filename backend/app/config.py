@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # --- Downloads ---
     idealista_download_concurrency: int = Field(default=4, ge=1, le=16)
 
+    # --- Links públicos ---
+    public_base_url: str = Field(default="https://imoveis.chanilaicastro.pt")
+
     @property
     def is_dev(self) -> bool:
         return self.env.lower() in {"dev", "development", "local"}

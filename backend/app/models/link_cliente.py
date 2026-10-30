@@ -55,6 +55,7 @@ class LinkCliente(Base, PKMixin, TimestampMixin):
         String(128), unique=True, nullable=False, index=True
     )
     token_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    token_visible: Mapped[str] = mapped_column(String(512), nullable=False)
 
     ativo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     expira_em: Mapped[datetime] = mapped_column(
