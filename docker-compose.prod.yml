@@ -81,6 +81,10 @@ services:
       - "traefik.http.routers.imoveis.rule=Host(`imoveis.chanilaicastro.pt`)"
       - "traefik.http.routers.imoveis.entrypoints=web"
       - "traefik.http.services.imoveis.loadbalancer.server.port=80"
+      - "traefik.http.routers.imoveis-api.rule=Host(`imoveis.chanilaicastro.pt`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.imoveis-api.entrypoints=web"
+      - "traefik.http.routers.imoveis-api.priority=100"
+      - "traefik.http.routers.imoveis-api.service=crm-api"
 
 networks:
   traefik-net:
