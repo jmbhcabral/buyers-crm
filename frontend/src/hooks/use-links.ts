@@ -84,3 +84,31 @@ export function useRevogarLink() {
     },
   })
 }
+
+export function useAdicionarImovelAoLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ linkId, versaoId }: { linkId: number; versaoId: number }) => {
+      await api.post(`/links/${linkId}/imoveis`, { imovel_versao_id: versaoId })
+    },
+    onSuccess: (_, { linkId }) => {
+      qc.invalidateQueries({ queryKey: ['links', linkId] })
+      qc.invalidateQueries({ queryKey: ['links', 'cliente'] })
+      qc.invalidateQueries({ queryKey: ['links'] })
+    },
+  })
+}
+
+export function useRemoverImovelDoLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ linkId, versaoId }: { linkId: number; versaoId: number }) => {
+      await api.delete(`/links/${linkId}/imoveis/${versaoId}`)
+    },
+    onSuccess: (_, { linkId }) => {
+      qc.invalidateQueries({ queryKey: ['links', linkId] })
+      qc.invalidateQueries({ queryKey: ['links', 'cliente'] })
+      qc.invalidateQueries({ queryKey: ['links'] })
+    },
+  })
+}

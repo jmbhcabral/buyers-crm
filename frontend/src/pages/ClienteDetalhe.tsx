@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, ArrowLeft, Building2 } from 'lucide-react'
 import FormCliente from '@/components/cliente/FormCliente'
 import LinkCliente from '@/components/cliente/LinkCliente'
+import GestaoImoveisDoLink from '@/components/cliente/GestaoImoveisDoLink'
 
 export default function ClienteDetalhe() {
   const { id } = useParams()
@@ -61,6 +62,10 @@ export default function ClienteDetalhe() {
         </div>
         <div className="space-y-6">
           <LinkCliente clienteId={clienteId} />
+          <GestaoImoveisDoLink
+            clienteId={clienteId}
+            imoveisAssociados={imoveis ?? []}
+          />
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
