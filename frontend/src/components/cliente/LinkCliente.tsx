@@ -134,11 +134,7 @@ export default function LinkCliente({ clienteId }: Props) {
                   Copiar
                 </Button>
                 <Button size="sm" variant="outline" asChild>
-                  <a
-                    href={link.url_publica ?? '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a href={link.url_publica ?? '#'} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-3.5 w-3.5 mr-1" />
                     Abrir
                   </a>
@@ -151,17 +147,19 @@ export default function LinkCliente({ clienteId }: Props) {
                   <BarChart3 className="h-3.5 w-3.5 mr-1" />
                   Analytics ({link.num_acessos})
                 </Button>
-                {link.ativo && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleRenovar}
-                    disabled={renovar.isPending}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                    Renovar
-                  </Button>
-                )}
+
+                {/* Renovar: sempre visível. Label muda conforme o estado. */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRenovar}
+                  disabled={renovar.isPending}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                  {link.ativo ? 'Renovar' : 'Reativar'}
+                </Button>
+
+                {/* Revogar: só quando está ativo */}
                 {link.ativo && (
                   <Button
                     size="sm"
