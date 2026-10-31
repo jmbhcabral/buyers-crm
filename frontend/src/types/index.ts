@@ -4,6 +4,8 @@ export interface Consultor {
   telefone: string | null
   nif: string | null
   bio: string | null
+  agencia: string | null
+  foto_url: string | null
   ativo: boolean
   criado_em: string
   atualizado_em: string

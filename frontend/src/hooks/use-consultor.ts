@@ -19,6 +19,7 @@ export function useAtualizarConsultor() {
       telefone?: string | null
       nif?: string | null
       bio?: string | null
+      agencia?: string | null 
     }) => {
       const { data } = await api.patch<Consultor>('/me/consultor', payload)
       return data
