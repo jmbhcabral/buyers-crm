@@ -81,11 +81,7 @@ def listar_imoveis(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[ImovelVersaoListItem]:
-    """Lista versões de imóveis do consultor autenticado.
-
-    - Consultor: só as suas versões.
-    - Admin: só as suas também (para ver todas, usa /admin/... — fase futura).
-    """
+    """Lista versões de imóveis do consultor autenticado."""
     if consultor is None:
         return []
 
@@ -98,7 +94,6 @@ def listar_imoveis(
     if apenas_com_conflitos:
         stmt = stmt.where(ImovelVersao.tem_conflitos.is_(True))
 
-    # Pesquisa: procura em título da versão OU property_id do canónico
     if q:
         like = f"%{q.lower()}%"
         stmt = stmt.join(ImovelVersao.canonico).where(
@@ -109,17 +104,13 @@ def listar_imoveis(
     stmt = stmt.order_by(ImovelVersao.atualizado_em.desc()).limit(limit).offset(offset)
     versoes = list(db.scalars(stmt).all())
 
-    # Contagem de fotos e clientes por versão (evita N+1)
     versao_ids = [v.id for v in versoes]
     canonico_ids = [v.imovel_canonico_id for v in versoes]
 
     if versao_ids:
         contagem_fotos = dict(
             db.execute(
-                select(
-                    ImovelCanonico.id,
-                    func.count(),
-                )
+                select(ImovelCanonico.id, func.count())
                 .join(ImovelCanonico.fotos)
                 .where(ImovelCanonico.id.in_(canonico_ids))
                 .group_by(ImovelCanonico.id)
@@ -127,19 +118,27 @@ def listar_imoveis(
         )
         contagem_clientes = dict(
             db.execute(
-                select(
-                    ImovelVersaoCliente.imovel_versao_id,
-                    func.count(),
-                )
+                select(ImovelVersaoCliente.imovel_versao_id, func.count())
                 .where(ImovelVersaoCliente.imovel_versao_id.in_(versao_ids))
                 .group_by(ImovelVersaoCliente.imovel_versao_id)
             ).all()
         )
+
+        # Primeira foto por canónico
+        primeira_foto: dict[int, int] = {}
+        fotos_ordenadas = db.scalars(
+            select(Foto)
+            .where(Foto.imovel_canonico_id.in_(canonico_ids), Foto.ativa.is_(True))
+            .order_by(Foto.imovel_canonico_id, Foto.ordem)
+        ).all()
+        for f in fotos_ordenadas:
+            if f.imovel_canonico_id not in primeira_foto:
+                primeira_foto[f.imovel_canonico_id] = f.id
     else:
         contagem_fotos = {}
         contagem_clientes = {}
+        primeira_foto = {}
 
-    # Construir a resposta
     resultado: list[ImovelVersaoListItem] = []
     for v in versoes:
         resultado.append(
@@ -155,6 +154,7 @@ def listar_imoveis(
                 property_id=v.canonico.property_id,
                 num_fotos=contagem_fotos.get(v.imovel_canonico_id, 0),
                 num_clientes=contagem_clientes.get(v.id, 0),
+                primeira_foto_id=primeira_foto.get(v.imovel_canonico_id),
             )
         )
     return resultado

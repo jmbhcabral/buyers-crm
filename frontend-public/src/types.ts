@@ -1,3 +1,11 @@
+export interface ConsultorPublic {
+  id: number
+  nome: string
+  agencia: string | null
+  telefone: string | null
+  foto_url: string | null
+}
+
 export interface PublicLinkInfo {
   cliente_nome_mascarado: string
   expira_em: string
@@ -16,6 +24,7 @@ export interface PublicImovelItem {
 export interface PublicLinkResponse {
   link: PublicLinkInfo
   imoveis: PublicImovelItem[]
+  consultor: ConsultorPublic | null
 }
 
 export interface PublicFoto {
@@ -34,10 +43,10 @@ export interface PublicImovelDetalhe {
   preco: string | null
   localizacao: string[] | null
   descricao: string | null
-  anunciante: string | null
   caracteristicas: Array<{ nome: string; valor: string; subtexto: string | null }> | null
   caracteristicas_especificas: string[] | null
   telefone: any
   url_original: string | null
   fotos: PublicFoto[]
+  consultor: ConsultorPublic | null
 }

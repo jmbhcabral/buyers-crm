@@ -6,6 +6,15 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
+# --- Consultor público (usado no header, lista e detalhe) ---
+class ConsultorPublic(BaseModel):
+    id: int
+    nome: str
+    agencia: str | None = None
+    telefone: str | None = None
+    foto_url: str | None = None
+
+
 # --- Metadata do link ---
 class PublicLinkInfo(BaseModel):
     cliente_nome_mascarado: str
@@ -27,6 +36,7 @@ class PublicImovelItem(BaseModel):
 class PublicLinkResponse(BaseModel):
     link: PublicLinkInfo
     imoveis: list[PublicImovelItem]
+    consultor: ConsultorPublic | None = None       # <-- NOVO
 
 
 # --- Foto ---
@@ -35,21 +45,13 @@ class PublicFotoRead(BaseModel):
 
     id: int
     ordem: int
-    url: str  # URL público do endpoint de fotos
+    url: str
     largura: int | None = None
     altura: int | None = None
     tag: str | None = None
     titulo: str | None = None
 
 
-class ConsultorPublic(BaseModel):
-    id: int
-    nome: str
-    agencia: str | None = None
-    telefone: str | None = None
-    foto_url: str | None = None
-
-    
 # --- Detalhe do imóvel ---
 class PublicImovelDetalhe(BaseModel):
     imovel_versao_id: int
@@ -66,4 +68,3 @@ class PublicImovelDetalhe(BaseModel):
     fotos: list[PublicFotoRead] = []
 
     consultor: ConsultorPublic | None = None
-

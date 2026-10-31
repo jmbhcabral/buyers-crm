@@ -139,10 +139,10 @@ class ImovelVersaoListItem(BaseModel):
     atualizado_em: datetime
     criado_em: datetime
 
-    # Metadados úteis para a UI
     property_id: str
     num_fotos: int = 0
     num_clientes: int = 0
+    primeira_foto_id: int | None = None
 
 
 # ===========================================================================

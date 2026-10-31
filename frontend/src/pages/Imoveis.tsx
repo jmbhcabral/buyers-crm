@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import FotoBlob from '@/components/imovel/FotoBlob'
 import {
   Loader2,
   Search,
@@ -45,7 +46,6 @@ export default function Imoveis() {
         </div>
       </div>
 
-      {/* Filtros */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
@@ -72,7 +72,6 @@ export default function Imoveis() {
         </CardContent>
       </Card>
 
-      {/* Conteúdo */}
       {isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -114,8 +113,16 @@ export default function Imoveis() {
               {imoveis?.map((imovel) => (
                 <TableRow key={imovel.id}>
                   <TableCell>
-                    <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
-                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                    <div className="w-12 h-12 bg-muted rounded overflow-hidden flex items-center justify-center">
+                      {imovel.primeira_foto_id ? (
+                        <FotoBlob
+                          versaoId={imovel.id}
+                          fotoId={imovel.primeira_foto_id}
+                          alt=""
+                        />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

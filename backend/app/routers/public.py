@@ -139,7 +139,6 @@ def obter_link_publico(
     _no_cache(response)
     link = _obter_link_valido(db, token)
 
-    # Buscar imóveis do link (ordenados)
     rows = db.execute(
         select(LinkImovel, ImovelVersao, ImovelCanonico)
         .join(ImovelVersao, ImovelVersao.id == LinkImovel.imovel_versao_id)
@@ -153,7 +152,6 @@ def obter_link_publico(
     primeira_foto: dict[int, int] = {}
 
     if canonico_ids:
-        # 1. Contagem de fotos ativas por canónico
         contagem_fotos = dict(
             db.execute(
                 select(Foto.imovel_canonico_id, func.count())
@@ -162,7 +160,6 @@ def obter_link_publico(
             ).all()
         )
 
-        # 2. Primeira foto (ordem menor) de cada canónico
         fotos_ordenadas = db.scalars(
             select(Foto)
             .where(Foto.imovel_canonico_id.in_(canonico_ids), Foto.ativa.is_(True))
@@ -172,7 +169,6 @@ def obter_link_publico(
             if f.imovel_canonico_id not in primeira_foto:
                 primeira_foto[f.imovel_canonico_id] = f.id
 
-    # Construir a resposta
     imoveis_out: list[PublicImovelItem] = []
     for li, v, c in rows:
         foto_id = primeira_foto.get(c.id)
@@ -193,6 +189,25 @@ def obter_link_publico(
             )
         )
 
+    # Consultor dono do link (para o header)
+    consultor_dono = db.get(Consultor, link.consultor_id)
+    consultor_public = None
+    if consultor_dono:
+        user = db.get(User, consultor_dono.user_id)
+        foto_consultor_url = None
+        if consultor_dono.foto_caminho:
+            versao = int(consultor_dono.atualizado_em.timestamp())
+            foto_consultor_url = (
+                f"/api/public/consultores/{consultor_dono.id}/foto?v={versao}"
+            )
+        consultor_public = ConsultorPublic(
+            id=consultor_dono.id,
+            nome=user.nome if user else "",
+            agencia=consultor_dono.agencia,
+            telefone=consultor_dono.telefone,
+            foto_url=foto_consultor_url,
+        )
+
     _registar_acesso(db, link, request, imovel_versao_id=None)
 
     return PublicLinkResponse(
@@ -201,6 +216,7 @@ def obter_link_publico(
             expira_em=link.expira_em,
         ),
         imoveis=imoveis_out,
+        consultor=consultor_public,
     )
 
 # ---------------------------------------------------------------------------

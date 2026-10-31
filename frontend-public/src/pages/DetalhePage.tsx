@@ -7,25 +7,34 @@ import { Layout } from '../components/Layout'
 export function DetalhePage() {
   const { token, versaoId } = useParams<{ token: string; versaoId: string }>()
   const [data, setData] = useState<PublicImovelDetalhe | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true)   // initializer
   const [erro, setErro] = useState<string | null>(null)
   const [fotoAtiva, setFotoAtiva] = useState(0)
   const [lightbox, setLightbox] = useState(false)
 
   useEffect(() => {
     if (!token || !versaoId) return
-    setLoading(true)
-    setErro(null)
+    let cancelled = false
+
     api
       .get<PublicImovelDetalhe>(`/public/links/${token}/imoveis/${versaoId}`)
-      .then((r) => setData(r.data))
+      .then((r) => {
+        if (!cancelled) setData(r.data)
+      })
       .catch((e) => {
+        if (cancelled) return
         const status = e?.response?.status
         if (status === 410) setErro('Este link já não está ativo.')
         else if (status === 404) setErro('Imóvel não encontrado.')
         else setErro('Não foi possível carregar o imóvel.')
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [token, versaoId])
 
   if (loading) {
@@ -56,7 +65,7 @@ export function DetalhePage() {
   const fotoAtual = fotos[fotoAtiva]
 
   return (
-    <Layout>
+    <Layout consultor={data.consultor ?? null}>
       <Link
         to={`/s/${token}`}
         className="inline-flex items-center text-sm text-primary font-medium mb-4"
@@ -123,7 +132,12 @@ export function DetalhePage() {
                 <div key={i} className="bg-gray-50 rounded-lg p-3">
                   <p className="text-base font-bold text-primary">
                     {c.valor}
-                    {c.subtexto && <span className="text-xs font-normal text-gray-500"> {c.subtexto}</span>}
+                    {c.subtexto && (
+                      <span className="text-xs font-normal text-gray-500">
+                        {' '}
+                        {c.subtexto}
+                      </span>
+                    )}
                   </p>
                 </div>
               ))}
@@ -144,9 +158,7 @@ export function DetalhePage() {
       {/* Características específicas */}
       {data.caracteristicas_especificas && data.caracteristicas_especificas.length > 0 && (
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">
-            Detalhes
-          </h2>
+          <h2 className="text-sm font-semibold text-gray-900 mb-3">Detalhes</h2>
           <ul className="space-y-1.5">
             {data.caracteristicas_especificas.map((c, i) => (
               <li key={i} className="text-sm text-gray-700 flex gap-2">

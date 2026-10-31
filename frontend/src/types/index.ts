@@ -88,6 +88,7 @@ export interface ImovelVersaoListItem {
   property_id: string
   num_fotos: number
   num_clientes: number
+  primeira_foto_id: number | null
 }
 
 export interface ImovelVersao {
