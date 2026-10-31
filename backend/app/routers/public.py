@@ -13,14 +13,17 @@ from sqlalchemy.orm import selectinload
 from app.deps import DbSession
 from app.models import (
     Cliente,
+    Consultor,
     Foto,
     ImovelCanonico,
     ImovelVersao,
     LinkAcesso,
     LinkCliente,
     LinkImovel,
+    User,
 )
 from app.schemas.public import (
+    ConsultorPublic,
     PublicFotoRead,
     PublicImovelDetalhe,
     PublicImovelItem,
@@ -28,10 +31,13 @@ from app.schemas.public import (
     PublicLinkResponse,
 )
 from app.security import hash_link_token
+from app.services.consultor_utils import build_consultor_read
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/public/links", tags=["public"])
+router_consultores = APIRouter(prefix="/public/consultores", tags=["public"])
 
 def _no_cache(response: Response) -> None:
     """Obriga o browser a não cachear respostas públicas.
@@ -236,6 +242,19 @@ def obter_imovel_publico(
 
     _registar_acesso(db, link, request, imovel_versao_id=versao_id)
 
+    consultor_dono = db.get(Consultor, versao.consultor_id)  # importa Consultor
+    consultor_public = None
+    if consultor_dono:
+        user = db.get(User, consultor_dono.user_id)
+        consultor_public = ConsultorPublic(
+            id=consultor_dono.id,
+            nome=user.nome if user else "",
+            agencia=consultor_dono.agencia,
+            telefone=consultor_dono.telefone,
+            foto_url=f"/api/public/consultores/{consultor_dono.id}/foto"
+            if consultor_dono.foto_caminho else None,
+        )
+
     return PublicImovelDetalhe(
         imovel_versao_id=versao.id,
         titulo=versao.titulo or canonico.titulo,
@@ -247,6 +266,8 @@ def obter_imovel_publico(
         telefone=canonico.telefone,
         url_original=canonico.url,
         fotos=fotos_out,
+        consultor=consultor_public,
+
     )
 
 
@@ -282,4 +303,27 @@ def obter_foto_publica(
         caminho,
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400"},  # 1 dia
+    )
+
+
+@router_consultores.get("/{consultor_id}/foto")
+def obter_foto_consultor(
+    consultor_id: int,
+    db: DbSession,
+) -> FileResponse:
+    """Serve a foto de perfil do consultor (público — usado na app de clientes)."""
+
+    consultor = db.get(Consultor, consultor_id)
+    if consultor is None or not consultor.foto_caminho:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto não encontrada")
+
+    caminho = Path(consultor.foto_caminho)
+    if not caminho.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ficheiro não encontrado")
+
+    # Cache 1 dia — a foto raramente muda
+    return FileResponse(
+        caminho,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
     )

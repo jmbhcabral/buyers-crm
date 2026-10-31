@@ -39,6 +39,7 @@ services:
     volumes:
       - fotos_storage:/app/storage/fotos
       - pdfs_storage:/app/storage/pdfs
+      - consultores_storage:/app/storage/consultores 
     command: >
       sh -c "
         alembic upgrade head &&
@@ -94,3 +95,4 @@ volumes:
   postgres_data:
   fotos_storage:
   pdfs_storage:
+  consultores_storage:

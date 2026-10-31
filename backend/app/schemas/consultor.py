@@ -17,6 +17,7 @@ class ConsultorUpdate(BaseModel):
     telefone: str | None = Field(default=None, max_length=32)
     nif: str | None = Field(default=None, max_length=16)
     bio: str | None = None
+    agencia: str | None = Field(default=None, max_length=255)
 
 
 class ConsultorRead(ConsultorBase):
@@ -27,6 +28,9 @@ class ConsultorRead(ConsultorBase):
     ativo: bool
     criado_em: datetime
     atualizado_em: datetime
+    agencia: str | None = None
+    foto_url: str | None = None
+    nome: str | None = None
 
 
 class ConsultorComUser(ConsultorRead):

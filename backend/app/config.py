@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # --- Links públicos ---
     public_base_url: str = Field(default="https://imoveis.chanilaicastro.pt")
 
+    # --- Consultores ---
+    @property
+    def storage_consultores_dir(self) -> Path:
+        return self.storage_dir.parent / "consultores"
+
     @property
     def is_dev(self) -> bool:
         return self.env.lower() in {"dev", "development", "local"}

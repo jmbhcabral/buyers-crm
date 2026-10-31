@@ -5,6 +5,7 @@ from app.middleware import PrivateNetworkAccessMiddleware
 
 from app.config import settings
 from app.routers import admin, api_keys, auth, me, clientes, consultores, dashboard, links, imoveis, pdfs, public
+from app.routers.public import router_consultores
 
 app = FastAPI(
     title="Buyers CRM API",
@@ -54,6 +55,7 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(links.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
+app.include_router(router_consultores, prefix="/api")
 
 
 @app.get("/health", tags=["sistema"])

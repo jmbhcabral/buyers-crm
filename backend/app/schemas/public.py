@@ -42,6 +42,14 @@ class PublicFotoRead(BaseModel):
     titulo: str | None = None
 
 
+class ConsultorPublic(BaseModel):
+    id: int
+    nome: str
+    agencia: str | None = None
+    telefone: str | None = None
+    foto_url: str | None = None
+
+    
 # --- Detalhe do imóvel ---
 class PublicImovelDetalhe(BaseModel):
     imovel_versao_id: int
@@ -56,3 +64,6 @@ class PublicImovelDetalhe(BaseModel):
 
     url_original: str | None = None
     fotos: list[PublicFotoRead] = []
+
+    consultor: ConsultorPublic | None = None
+

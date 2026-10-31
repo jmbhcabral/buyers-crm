@@ -27,6 +27,8 @@ class Consultor(Base, PKMixin, TimestampMixin):
     telefone: Mapped[str | None] = mapped_column(String(32))
     nif: Mapped[str | None] = mapped_column(String(16))
     bio: Mapped[str | None] = mapped_column(Text)
+    agencia: Mapped[str | None] = mapped_column(String(255))
+    foto_caminho: Mapped[str | None] = mapped_column(String(512))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relações

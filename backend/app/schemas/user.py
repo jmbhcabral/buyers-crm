@@ -1,8 +1,10 @@
 """Schemas de utilizador e consultor."""
-
+from typing import Annotated
+from dataclasses import Field
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 
 class ConsultorRead(BaseModel):
@@ -25,3 +27,8 @@ class UserRead(BaseModel):
     ativo: bool
     criado_em: datetime
     consultor: ConsultorRead | None = None
+
+
+class UserUpdate(BaseModel):
+    nome: Annotated[str, StringConstraints(min_length=1, max_length=255)] | None = None
+    email: str | None = None
