@@ -242,7 +242,6 @@ def obter_imovel_publico(
         preco=versao.preco or canonico.preco,
         localizacao=versao.localizacao or canonico.localizacao,
         descricao=canonico.descricao,
-        anunciante=canonico.anunciante,
         caracteristicas=canonico.caracteristicas,
         caracteristicas_especificas=canonico.caracteristicas_especificas,
         telefone=canonico.telefone,

@@ -49,7 +49,6 @@ class PublicImovelDetalhe(BaseModel):
     preco: str | None = None
     localizacao: list[Any] | None = None
     descricao: str | None = None
-    anunciante: str | None = None
 
     caracteristicas: list[Any] | None = None
     caracteristicas_especificas: list[Any] | None = None

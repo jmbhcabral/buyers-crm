@@ -108,9 +108,6 @@ export function DetalhePage() {
         {data.preco && (
           <p className="text-2xl font-bold text-primary mt-3">{data.preco}</p>
         )}
-        {data.anunciante && (
-          <p className="text-xs text-gray-400 mt-2">Anunciante: {data.anunciante}</p>
-        )}
       </div>
 
       {/* Características */}
