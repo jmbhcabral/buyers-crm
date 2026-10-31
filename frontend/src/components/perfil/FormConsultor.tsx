@@ -90,10 +90,10 @@ export default function FormConsultor({ consultor }: Props) {
             <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center text-2xl text-muted-foreground">
               {consultor.foto_url ? (
                 <img
-                  key={consultor.foto_url}   // força o React a recriar o <img> quando o URL muda
+                  key={consultor.foto_url}
                   src={consultor.foto_url}
                   alt="Foto de perfil"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-top"
                 />
               ) : (
                 nome.charAt(0).toUpperCase() || '?'
