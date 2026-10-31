@@ -125,6 +125,26 @@ def _validar_imovel_no_link(db: DbSession, link: LinkCliente, versao_id: int) ->
     return versao
 
 
+def _build_consultor_public(db: DbSession, consultor_id: int) -> ConsultorPublic | None:
+    """Constrói o ConsultorPublic (com foto cache-busted e email)."""
+    consultor = db.get(Consultor, consultor_id)
+    if consultor is None:
+        return None
+    user = db.get(User, consultor.user_id)
+
+    foto_url = None
+    if consultor.foto_caminho:
+        versao = int(consultor.atualizado_em.timestamp())
+        foto_url = f"/api/public/consultores/{consultor.id}/foto?v={versao}"
+
+    return ConsultorPublic(
+        id=consultor.id,
+        nome=user.nome if user else "",
+        email=user.email if user else None,       # <-- NOVO
+        agencia=consultor.agencia,
+        telefone=consultor.telefone,
+        foto_url=foto_url,
+    )
 # ---------------------------------------------------------------------------
 # GET /api/public/links/{token}
 # ---------------------------------------------------------------------------
@@ -189,24 +209,7 @@ def obter_link_publico(
             )
         )
 
-    # Consultor dono do link (para o header)
-    consultor_dono = db.get(Consultor, link.consultor_id)
-    consultor_public = None
-    if consultor_dono:
-        user = db.get(User, consultor_dono.user_id)
-        foto_consultor_url = None
-        if consultor_dono.foto_caminho:
-            versao = int(consultor_dono.atualizado_em.timestamp())
-            foto_consultor_url = (
-                f"/api/public/consultores/{consultor_dono.id}/foto?v={versao}"
-            )
-        consultor_public = ConsultorPublic(
-            id=consultor_dono.id,
-            nome=user.nome if user else "",
-            agencia=consultor_dono.agencia,
-            telefone=consultor_dono.telefone,
-            foto_url=foto_consultor_url,
-        )
+    consultor_public = _build_consultor_public(db, link.consultor_id)
 
     _registar_acesso(db, link, request, imovel_versao_id=None)
 
@@ -258,22 +261,7 @@ def obter_imovel_publico(
 
     _registar_acesso(db, link, request, imovel_versao_id=versao_id)
 
-    consultor_dono = db.get(Consultor, versao.consultor_id)  # importa Consultor
-    consultor_public = None
-    if consultor_dono:
-        user = db.get(User, consultor_dono.user_id)
-        foto_url = None
-        if consultor_dono.foto_caminho:
-            versao = int(consultor_dono.atualizado_em.timestamp())
-            foto_url = f"/api/public/consultores/{consultor_dono.id}/foto?v={versao}"
-
-        consultor_public = ConsultorPublic(
-            id=consultor_dono.id,
-            nome=user.nome if user else "",
-            agencia=consultor_dono.agencia,
-            telefone=consultor_dono.telefone,
-            foto_url=foto_url,
-        )
+    consultor_public = _build_consultor_public(db, versao.consultor_id)
 
     return PublicImovelDetalhe(
         imovel_versao_id=versao.id,

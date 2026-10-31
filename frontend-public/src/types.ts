@@ -2,6 +2,7 @@ export interface ConsultorPublic {
   id: number
   nome: string
   agencia: string | null
+  email: string | null
   telefone: string | null
   foto_url: string | null
 }

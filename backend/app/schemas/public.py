@@ -11,6 +11,7 @@ class ConsultorPublic(BaseModel):
     id: int
     nome: str
     agencia: str | None = None
+    email: str | None = None
     telefone: str | None = None
     foto_url: str | None = None
 
