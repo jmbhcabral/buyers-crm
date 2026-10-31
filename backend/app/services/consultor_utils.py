@@ -20,8 +20,13 @@ def get_consultor_do_user(db: Session, user: User) -> Consultor:
 
 
 def build_consultor_read(db, consultor) -> ConsultorRead:
-    """Junta Consultor + User.nome e devolve o schema."""
     user = db.get(User, consultor.user_id)
+    foto_url = None
+    if consultor.foto_caminho:
+        # ?v=... invalida a cache do browser quando a foto muda
+        versao = int(consultor.atualizado_em.timestamp())
+        foto_url = f"/api/public/consultores/{consultor.id}/foto?v={versao}"
+
     return ConsultorRead(
         id=consultor.id,
         user_id=consultor.user_id,
@@ -29,11 +34,7 @@ def build_consultor_read(db, consultor) -> ConsultorRead:
         nif=consultor.nif,
         bio=consultor.bio,
         agencia=consultor.agencia,
-        foto_url=(
-            f"/api/public/consultores/{consultor.id}/foto"
-            if consultor.foto_caminho
-            else None
-        ),
+        foto_url=foto_url,
         nome=user.nome if user else None,
         ativo=consultor.ativo,
         criado_em=consultor.criado_em,

@@ -246,13 +246,17 @@ def obter_imovel_publico(
     consultor_public = None
     if consultor_dono:
         user = db.get(User, consultor_dono.user_id)
+        foto_url = None
+        if consultor_dono.foto_caminho:
+            versao = int(consultor_dono.atualizado_em.timestamp())
+            foto_url = f"/api/public/consultores/{consultor_dono.id}/foto?v={versao}"
+
         consultor_public = ConsultorPublic(
             id=consultor_dono.id,
             nome=user.nome if user else "",
             agencia=consultor_dono.agencia,
             telefone=consultor_dono.telefone,
-            foto_url=f"/api/public/consultores/{consultor_dono.id}/foto"
-            if consultor_dono.foto_caminho else None,
+            foto_url=foto_url,
         )
 
     return PublicImovelDetalhe(
