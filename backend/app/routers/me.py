@@ -20,6 +20,15 @@ def obter_me(user: CurrentUser) -> UserRead:
     return UserRead.model_validate(user)
 
 
+@router.get("/consultor", response_model=ConsultorRead)
+def obter_meu_consultor(
+    db: DbSession,
+    consultor: CurrentConsultor,
+) -> ConsultorRead:
+    """Devolve o perfil do consultor autenticado."""
+    return _build_consultor_read(db, consultor)
+
+
 @router.patch("/consultor", response_model=ConsultorRead)
 def atualizar_meu_consultor(
     payload: ConsultorUpdate,
