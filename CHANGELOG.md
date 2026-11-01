@@ -31,3 +31,34 @@ Nota: O funcionamento efectivo do filtro por labels e a origem/manutenção da i
   com.centurylinklabs.watchtower.enable=true.
 * Confirmado que o filtro por labels do Watchtower está operacional
   conforme pretendido.
+
+
+## [Unreleased] — Interações cliente ↔ imóvel
+
+### Added
+- Campo `estado_imovel` em `ImovelVersao` (disponivel, reservado, cpcv,
+  escritura_marcada, vendido, saiu_mercado). Editável no CRM.
+- Tabelas `interacoes_imovel` e `notas_cliente_imovel`.
+- Endpoints públicos:
+  - GET    /api/public/links/{token}/interacoes
+  - PUT    /api/public/links/{token}/imoveis/{id}/interesse
+  - POST   /api/public/links/{token}/imoveis/{id}/pedidos
+  - DELETE /api/public/links/{token}/interacoes/{id}
+  - GET    /api/public/links/{token}/notas
+  - POST   /api/public/links/{token}/notas
+  - PATCH  /api/public/links/{token}/notas/{id}/ler
+- Endpoints CRM:
+  - GET/POST /api/clientes/{id}/interacoes, /notas
+  - GET/POST /api/imoveis/{id}/interacoes, /notas
+  - PATCH    /api/interacoes/{id}
+  - PATCH    /api/notas/{id}/ler
+  - PATCH    /api/imoveis/{id}/estado
+  - GET      /api/dashboard/interacoes-pendentes
+- Frontend público: badge de estado, botões Interesse/Visita/Notas nos cards
+  e no detalhe, modal de pedido de visita, thread de notas.
+- Frontend CRM: selector de estado no detalhe do imóvel, secções de
+  interações e notas no detalhe do cliente, cartões de pendentes no dashboard.
+
+### Changed
+- `PublicImovelItem`, `PublicImovelDetalhe`, `LinkImovelRead` e
+  `ImovelVersaoListItem` incluem `estado_imovel`.

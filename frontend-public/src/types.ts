@@ -1,3 +1,11 @@
+export type EstadoImovel =
+  | 'disponivel' | 'reservado' | 'cpcv'
+  | 'escritura_marcada' | 'vendido' | 'saiu_mercado'
+
+export type TipoInteracao = 'interesse' | 'pedido_visita' | 'pedido_info'
+export type EstadoInteracao = 'pendente' | 'visto' | 'concluido' | 'cancelado'
+
+
 export interface ConsultorPublic {
   id: number
   nome: string
@@ -20,6 +28,7 @@ export interface PublicImovelItem {
   localizacao: string[] | null
   num_fotos: number
   primeira_foto_url: string | null
+  estado_imovel: EstadoImovel
 }
 
 export interface PublicLinkResponse {
@@ -50,4 +59,37 @@ export interface PublicImovelDetalhe {
   url_original: string | null
   fotos: PublicFoto[]
   consultor: ConsultorPublic | null
+  estado_imovel: EstadoImovel
+}
+
+
+export interface Interacao {
+  id: number
+  cliente_id: number
+  imovel_versao_id: number
+  tipo: TipoInteracao
+  estado: EstadoInteracao
+  payload: Record<string, any> | null
+  lida_pelo_consultor: boolean
+  lida_pelo_cliente: boolean
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface Nota {
+  id: number
+  cliente_id: number
+  imovel_versao_id: number | null
+  autor_tipo: 'cliente' | 'consultor'
+  autor_user_id: number | null
+  conteudo: string
+  lida_pelo_destinatario: boolean
+  criado_em: string
+}
+
+export interface InteracoesResumo {
+  interesses: number[]
+  pedidos: Interacao[]
+  notas_nao_lidas: number
+  por_imovel: Record<number, { interesse: number; pedidos: number }>
 }

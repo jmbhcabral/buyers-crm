@@ -31,6 +31,7 @@ class PublicImovelItem(BaseModel):
     localizacao: list[Any] | None = None
     num_fotos: int = 0
     primeira_foto_url: str | None = None
+    estado_imovel: str = "disponivel"
 
 
 # --- Resposta da lista ---
@@ -69,3 +70,5 @@ class PublicImovelDetalhe(BaseModel):
     fotos: list[PublicFotoRead] = []
 
     consultor: ConsultorPublic | None = None
+
+    estado_imovel: str = "disponivel"

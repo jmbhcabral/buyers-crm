@@ -27,6 +27,7 @@ class LinkImovelRead(BaseModel):
     localizacao: list[Any] | None = None
     num_fotos: int = 0
     criado_em: datetime
+    estado_imovel: str = "disponivel"
 
 
 class LinkRead(BaseModel):

@@ -21,6 +21,8 @@ from app.models import (
     LinkCliente,
     LinkImovel,
     User,
+    InteracaoImovel, 
+    NotaClienteImovel
 )
 from app.schemas.public import (
     ConsultorPublic,
@@ -29,6 +31,10 @@ from app.schemas.public import (
     PublicImovelItem,
     PublicLinkInfo,
     PublicLinkResponse,
+)
+from app.schemas.interacao import (
+    InteracaoRead, InteracoesResumo, InteresseToggle,
+    NotaCreatePublic, NotaRead, PedidoCreate,
 )
 from app.security import hash_link_token
 from app.services.consultor_utils import build_consultor_read
@@ -206,6 +212,7 @@ def obter_link_publico(
                 localizacao=v.localizacao,
                 num_fotos=contagem_fotos.get(c.id, 0),
                 primeira_foto_url=foto_url,
+                estado_imovel=v.estado_imovel
             )
         )
 
@@ -275,7 +282,7 @@ def obter_imovel_publico(
         url_original=canonico.url,
         fotos=fotos_out,
         consultor=consultor_public,
-
+        estado_imovel=versao.estado_imovel
     )
 
 
@@ -335,3 +342,208 @@ def obter_foto_consultor(
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/public/links/{token}/interacoes
+# ---------------------------------------------------------------------------
+@router.get("/{token}/interacoes", response_model=InteracoesResumo)
+def obter_interacoes_publicas(
+    token: str,
+    response: Response,
+    db: DbSession,
+) -> InteracoesResumo:
+    _no_cache(response)
+    link = _obter_link_valido(db, token)
+
+    interacoes = db.scalars(
+        select(InteracaoImovel).where(InteracaoImovel.cliente_id == link.cliente_id)
+    ).all()
+
+    interesses = [i.imovel_versao_id for i in interacoes if i.tipo == "interesse"]
+    pedidos = [
+        InteracaoRead.model_validate(i)
+        for i in interacoes
+        if i.tipo in ("pedido_visita", "pedido_info")
+        and i.estado in ("pendente", "visto")
+    ]
+
+    notas_nao_lidas = db.scalar(
+        select(func.count()).select_from(NotaClienteImovel).where(
+            NotaClienteImovel.cliente_id == link.cliente_id,
+            NotaClienteImovel.autor_tipo == "consultor",
+            NotaClienteImovel.lida_pelo_destinatario.is_(False),
+        )
+    ) or 0
+
+    por_imovel: dict[int, dict[str, int]] = {}
+    for i in interacoes:
+        d = por_imovel.setdefault(i.imovel_versao_id, {"interesse": 0, "pedidos": 0})
+        if i.tipo == "interesse":
+            d["interesse"] = 1
+        elif i.estado in ("pendente", "visto"):
+            d["pedidos"] += 1
+
+    return InteracoesResumo(
+        interesses=interesses,
+        pedidos=pedidos,
+        notas_nao_lidas=notas_nao_lidas,
+        por_imovel=por_imovel,
+    )
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/public/links/{token}/imoveis/{versao_id}/interesse
+# ---------------------------------------------------------------------------
+@router.put("/{token}/imoveis/{versao_id}/interesse", status_code=status.HTTP_204_NO_CONTENT)
+def toggle_interesse(
+    token: str,
+    versao_id: int,
+    payload: InteresseToggle,
+    db: DbSession,
+) -> None:
+    link = _obter_link_valido(db, token)
+    _validar_imovel_no_link(db, link, versao_id)
+
+    existente = db.scalar(
+        select(InteracaoImovel).where(
+            InteracaoImovel.cliente_id == link.cliente_id,
+            InteracaoImovel.imovel_versao_id == versao_id,
+            InteracaoImovel.tipo == "interesse",
+        )
+    )
+    if payload.ativo and existente is None:
+        db.add(InteracaoImovel(
+            cliente_id=link.cliente_id,
+            imovel_versao_id=versao_id,
+            tipo="interesse",
+            estado="pendente",
+        ))
+        db.commit()
+    elif not payload.ativo and existente is not None:
+        db.delete(existente)
+        db.commit()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/public/links/{token}/imoveis/{versao_id}/pedidos
+# ---------------------------------------------------------------------------
+@router.post(
+    "/{token}/imoveis/{versao_id}/pedidos",
+    response_model=InteracaoRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_pedido_publico(
+    token: str,
+    versao_id: int,
+    payload: PedidoCreate,
+    db: DbSession,
+) -> InteracaoRead:
+    link = _obter_link_valido(db, token)
+    _validar_imovel_no_link(db, link, versao_id)
+
+    if payload.tipo not in ("pedido_visita", "pedido_info"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Tipo de pedido inválido"
+        )
+
+    interacao = InteracaoImovel(
+        cliente_id=link.cliente_id,
+        imovel_versao_id=versao_id,
+        tipo=payload.tipo,
+        estado="pendente",
+        payload=payload.payload,
+    )
+    db.add(interacao)
+    db.commit()
+    db.refresh(interacao)
+    return InteracaoRead.model_validate(interacao)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/public/links/{token}/interacoes/{interacao_id}
+# ---------------------------------------------------------------------------
+@router.delete(
+    "/{token}/interacoes/{interacao_id}", status_code=status.HTTP_204_NO_CONTENT,
+)
+def cancelar_interacao_publica(
+    token: str,
+    interacao_id: int,
+    db: DbSession,
+) -> None:
+    link = _obter_link_valido(db, token)
+    interacao = db.get(InteracaoImovel, interacao_id)
+    if interacao is None or interacao.cliente_id != link.cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Interação não encontrada")
+    if interacao.estado not in ("pendente", "visto"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Já não pode ser cancelada"
+        )
+    db.delete(interacao)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/public/links/{token}/notas
+# ---------------------------------------------------------------------------
+@router.get("/{token}/notas", response_model=list[NotaRead])
+def listar_notas_publicas(
+    token: str,
+    response: Response,
+    db: DbSession,
+    imovel_versao_id: int | None = None,
+) -> list[NotaRead]:
+    _no_cache(response)
+    link = _obter_link_valido(db, token)
+    stmt = select(NotaClienteImovel).where(
+        NotaClienteImovel.cliente_id == link.cliente_id
+    )
+    if imovel_versao_id is not None:
+        stmt = stmt.where(NotaClienteImovel.imovel_versao_id == imovel_versao_id)
+    stmt = stmt.order_by(NotaClienteImovel.criado_em)
+    return [NotaRead.model_validate(n) for n in db.scalars(stmt).all()]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/public/links/{token}/notas
+# ---------------------------------------------------------------------------
+@router.post(
+    "/{token}/notas", response_model=NotaRead, status_code=status.HTTP_201_CREATED,
+)
+def criar_nota_publica(
+    token: str,
+    payload: NotaCreatePublic,
+    db: DbSession,
+) -> NotaRead:
+    link = _obter_link_valido(db, token)
+    if payload.imovel_versao_id is not None:
+        _validar_imovel_no_link(db, link, payload.imovel_versao_id)
+    nota = NotaClienteImovel(
+        cliente_id=link.cliente_id,
+        imovel_versao_id=payload.imovel_versao_id,
+        autor_tipo="cliente",
+        conteudo=payload.conteudo,
+        lida_pelo_destinatario=False,
+    )
+    db.add(nota)
+    db.commit()
+    db.refresh(nota)
+    return NotaRead.model_validate(nota)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/public/links/{token}/notas/{nota_id}/ler
+# ---------------------------------------------------------------------------
+@router.patch("/{token}/notas/{nota_id}/ler", status_code=status.HTTP_204_NO_CONTENT)
+def marcar_nota_lida_publica(
+    token: str,
+    nota_id: int,
+    db: DbSession,
+) -> None:
+    link = _obter_link_valido(db, token)
+    nota = db.get(NotaClienteImovel, nota_id)
+    if nota is None or nota.cliente_id != link.cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Nota não encontrada")
+    if nota.autor_tipo == "consultor":
+        nota.lida_pelo_destinatario = True
+        db.commit()

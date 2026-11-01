@@ -231,6 +231,7 @@ def listar_imoveis_do_cliente(
             property_id=v.canonico.property_id,
             num_fotos=contagem_fotos.get(v.imovel_canonico_id, 0),
             num_clientes=contagem_clientes.get(v.id, 0),
+            estado_imovel=v.estado_imovel
         )
         for v in versoes
     ]

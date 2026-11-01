@@ -143,6 +143,7 @@ class ImovelVersaoListItem(BaseModel):
     num_fotos: int = 0
     num_clientes: int = 0
     primeira_foto_id: int | None = None
+    estado_imovel: str = "disponivel"
 
 
 # ===========================================================================

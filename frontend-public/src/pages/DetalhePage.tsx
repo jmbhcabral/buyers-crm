@@ -3,11 +3,14 @@ import { Link, useParams } from 'react-router-dom'
 import api from '../lib/api'
 import type { PublicImovelDetalhe } from '../types'
 import { Layout } from '../components/Layout'
+import { EstadoImovelBadge } from '../components/EstadoImovelBadge'
+import { AcoesImovel } from '../components/AcoesImovel'
+
 
 export function DetalhePage() {
   const { token, versaoId } = useParams<{ token: string; versaoId: string }>()
   const [data, setData] = useState<PublicImovelDetalhe | null>(null)
-  const [loading, setLoading] = useState(true)   // initializer
+  const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [fotoAtiva, setFotoAtiva] = useState(0)
   const [lightbox, setLightbox] = useState(false)
@@ -63,112 +66,142 @@ export function DetalhePage() {
 
   const fotos = data.fotos
   const fotoAtual = fotos[fotoAtiva]
+  const versaoIdNum = Number(versaoId)
 
   return (
     <Layout consultor={data.consultor ?? null}>
-      <Link
-        to={`/s/${token}`}
-        className="inline-flex items-center text-sm text-primary font-medium mb-4"
-      >
-        ← Voltar
-      </Link>
+      {/* padding inferior para não ser tapado pela sticky bar em mobile */}
+      <div className="pb-24 sm:pb-0">
+        <Link
+          to={`/s/${token}`}
+          className="inline-flex items-center text-sm text-primary font-medium mb-4"
+        >
+          ← Voltar
+        </Link>
 
-      {/* Galeria */}
-      {fotos.length > 0 && (
-        <div className="mb-4">
-          <div
-            className="aspect-[4/3] bg-gray-100 rounded-xl overflow-hidden cursor-zoom-in"
-            onClick={() => setLightbox(true)}
-          >
-            <img
-              src={fotoAtual.url}
-              alt={fotoAtual.titulo || 'Foto'}
-              className="w-full h-full object-cover"
-            />
+        {/* Galeria */}
+        {fotos.length > 0 && (
+          <div className="mb-4">
+            <div
+              className="aspect-[4/3] bg-gray-100 rounded-xl overflow-hidden cursor-zoom-in relative"
+              onClick={() => setLightbox(true)}
+            >
+              <img
+                src={fotoAtual.url}
+                alt={fotoAtual.titulo || 'Foto'}
+                className="w-full h-full object-cover"
+              />
+              <EstadoImovelBadge estado={data.estado_imovel} />
+            </div>
+            {fotos.length > 1 && (
+              <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
+                {fotos.map((f, i) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFotoAtiva(i)}
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                      i === fotoAtiva ? 'border-primary' : 'border-transparent opacity-60'
+                    }`}
+                  >
+                    <img src={f.url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {fotos.length > 1 && (
-            <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
-              {fotos.map((f, i) => (
-                <button
-                  key={f.id}
-                  onClick={() => setFotoAtiva(i)}
-                  className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
-                    i === fotoAtiva ? 'border-primary' : 'border-transparent opacity-60'
-                  }`}
-                >
-                  <img src={f.url} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
+        )}
+
+        {/* Info */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+          {fotos.length === 0 && (
+            <div className="mb-2">
+              <EstadoImovelBadge estado={data.estado_imovel} inline />
             </div>
           )}
-        </div>
-      )}
+          <h1 className="text-xl font-bold text-gray-900 leading-tight">
+            {data.titulo || 'Sem título'}
+          </h1>
+          {data.localizacao && data.localizacao.length > 0 && (
+            <p className="text-sm text-gray-500 mt-1">
+              📍 {data.localizacao.join(', ')}
+            </p>
+          )}
+          {data.preco && (
+            <p className="text-2xl font-bold text-primary mt-3">{data.preco}</p>
+          )}
 
-      {/* Info */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-        <h1 className="text-xl font-bold text-gray-900 leading-tight">
-          {data.titulo || 'Sem título'}
-        </h1>
-        {data.localizacao && data.localizacao.length > 0 && (
-          <p className="text-sm text-gray-500 mt-1">
-            📍 {data.localizacao.join(', ')}
-          </p>
+          {/* Ações — desktop */}
+          <div className="hidden sm:block mt-4 border-t pt-3">
+            <AcoesImovel
+              token={token!}
+              imovelVersaoId={versaoIdNum}
+              estado={data.estado_imovel}
+              layout="sticky"
+            />
+          </div>
+        </div>
+
+        {/* Características */}
+        {data.caracteristicas && data.caracteristicas.length > 0 && (
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">
+              Características principais
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              {data.caracteristicas
+                .filter((c) => c.nome !== 'PRICE')
+                .map((c, i) => (
+                  <div key={i} className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-base font-bold text-primary">
+                      {c.valor}
+                      {c.subtexto && (
+                        <span className="text-xs font-normal text-gray-500">
+                          {' '}
+                          {c.subtexto}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                ))}
+            </div>
+          </div>
         )}
-        {data.preco && (
-          <p className="text-2xl font-bold text-primary mt-3">{data.preco}</p>
+
+        {/* Descrição */}
+        {data.descricao && (
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Descrição</h2>
+            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+              {data.descricao}
+            </div>
+          </div>
+        )}
+
+        {/* Características específicas */}
+        {data.caracteristicas_especificas && data.caracteristicas_especificas.length > 0 && (
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Detalhes</h2>
+            <ul className="space-y-1.5">
+              {data.caracteristicas_especificas.map((c, i) => (
+                <li key={i} className="text-sm text-gray-700 flex gap-2">
+                  <span className="text-primary">•</span>
+                  {c}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
-      {/* Características */}
-      {data.caracteristicas && data.caracteristicas.length > 0 && (
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">
-            Características principais
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
-            {data.caracteristicas
-              .filter((c) => c.nome !== 'PRICE')
-              .map((c, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-base font-bold text-primary">
-                    {c.valor}
-                    {c.subtexto && (
-                      <span className="text-xs font-normal text-gray-500">
-                        {' '}
-                        {c.subtexto}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Descrição */}
-      {data.descricao && (
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">Descrição</h2>
-          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-            {data.descricao}
-          </div>
-        </div>
-      )}
-
-      {/* Características específicas */}
-      {data.caracteristicas_especificas && data.caracteristicas_especificas.length > 0 && (
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">Detalhes</h2>
-          <ul className="space-y-1.5">
-            {data.caracteristicas_especificas.map((c, i) => (
-              <li key={i} className="text-sm text-gray-700 flex gap-2">
-                <span className="text-primary">•</span>
-                {c}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Ações — sticky em mobile */}
+      <div className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t shadow-lg p-3 z-40">
+        <AcoesImovel
+          token={token!}
+          imovelVersaoId={versaoIdNum}
+          estado={data.estado_imovel}
+          layout="sticky"
+        />
+      </div>
 
       {/* Lightbox */}
       {lightbox && fotoAtual && (

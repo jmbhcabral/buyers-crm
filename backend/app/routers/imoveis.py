@@ -184,6 +184,7 @@ def _build_detalhe(db: Session, versao: ImovelVersao) -> ImovelVersaoComDetalhes
                 "anunciante", "caracteristicas", "caracteristicas_especificas",
                 "telefone", "notas_internas", "campos_alterados",
                 "tem_conflitos", "sincronizado_em",
+                "estado_imovel",
                 "criado_em", "atualizado_em",
             ]
         },

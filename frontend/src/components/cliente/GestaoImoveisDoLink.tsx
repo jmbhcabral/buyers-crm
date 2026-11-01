@@ -8,6 +8,17 @@ import {
   useRemoverImovelDoLink,
 } from '@/hooks/use-links'
 import type { ImovelVersaoListItem } from '@/types'
+import type { EstadoImovel } from '@/types'
+
+
+const ESTADO_LABEL: Record<EstadoImovel, string> = {
+  disponivel: 'Disponível',
+  reservado: 'Reservado',
+  cpcv: 'CPCV',
+  escritura_marcada: 'Escritura marcada',
+  vendido: 'Vendido',
+  saiu_mercado: 'Saiu de mercado',
+}
 
 interface Props {
   clienteId: number
@@ -64,7 +75,10 @@ export default function GestaoImoveisDoLink({ clienteId, imoveisAssociados }: Pr
                   <p className="text-sm font-medium line-clamp-1">
                     {i.titulo || 'Sem título'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
+                    {ESTADO_LABEL[i.estado_imovel]}
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-1">
                     {i.preco || '—'} · {i.num_fotos} fotos
                   </p>
                 </div>

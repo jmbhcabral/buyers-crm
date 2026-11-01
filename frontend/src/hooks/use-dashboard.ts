@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
-import type { DashboardStats, ImovelRecente, PdfRecente } from '@/types'
+import type { DashboardStats, ImovelRecente, PdfRecente, DashboardInteracoesPendentes } from '@/types'
 
 export function useDashboardStats() {
   return useQuery({
@@ -33,5 +33,18 @@ export function usePdfsRecentes(limit = 5) {
       )
       return data
     },
+  })
+}
+
+export function useInteracoesPendentes() {
+  return useQuery({
+    queryKey: ['dashboard', 'interacoes-pendentes'],
+    queryFn: async () => {
+      const { data } = await api.get<DashboardInteracoesPendentes>(
+        '/dashboard/interacoes-pendentes'
+      )
+      return data
+    },
+    refetchInterval: 60_000,
   })
 }

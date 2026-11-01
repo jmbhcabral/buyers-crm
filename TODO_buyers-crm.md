@@ -76,3 +76,12 @@ Infraestrutura
 * Configurar backups off-site (disco externo e/ou nuvem).
 * Testar recuperação de backups.
 * Criar script de deploy (./deploy.sh).
+
+
+- [ ] Adicionar notificações (email/push) para novos pedidos de visita.
+- [ ] Mostrar contagem de interesses/pedidos por imóvel no gestor de links
+      (requer agregação no backend).
+- [ ] Considerar "estado_imovel" como filtro na listagem de imóveis (CRM).
+- [ ] Avaliar mover estado para o canónico e sincronizar por versão
+      (atualmente vive na versão, decisão tomada).
+- [ ] Rate limiting nas rotas públicas de notas/pedidos.

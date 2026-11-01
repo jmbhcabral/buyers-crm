@@ -14,6 +14,8 @@ from app.models import (
     ImovelVersao,
     ImovelVersaoCliente,
     PdfGerado,
+    InteracaoImovel,
+    NotaClienteImovel,
 )
 from app.models.consultor import Consultor
 
@@ -211,3 +213,96 @@ def obter_pdfs_recentes(
         }
         for p, v, c, cl in rows
     ]
+
+
+@router.get("/interacoes-pendentes")
+def obter_interacoes_pendentes(
+    db: DbSession,
+    user: CurrentUser,
+    consultor: OptionalConsultor,
+) -> dict:
+    if not user.is_admin and consultor is None:
+        return {
+            "interesses_nao_vistos": 0,
+            "pedidos_pendentes": 0,
+            "pedidos_info_pendentes": 0,
+            "notas_nao_lidas": 0,
+            "recentes": [],
+        }
+
+    if user.is_admin and consultor is None:
+        versao_sub = select(ImovelVersao.id)
+        cliente_sub = select(Cliente.id)
+    else:
+        versao_sub = select(ImovelVersao.id).where(
+            ImovelVersao.consultor_id == consultor.id
+        )
+        cliente_sub = select(ClienteConsultor.cliente_id).where(
+            ClienteConsultor.consultor_id == consultor.id
+        )
+
+    interesses = db.scalar(
+        select(func.count()).select_from(InteracaoImovel).where(
+            InteracaoImovel.tipo == "interesse",
+            InteracaoImovel.lida_pelo_consultor.is_(False),
+            InteracaoImovel.imovel_versao_id.in_(versao_sub),
+        )
+    ) or 0
+
+    pedidos = db.scalar(
+        select(func.count()).select_from(InteracaoImovel).where(
+            InteracaoImovel.tipo == "pedido_visita",
+            InteracaoImovel.estado == "pendente",
+            InteracaoImovel.imovel_versao_id.in_(versao_sub),
+        )
+    ) or 0
+
+    pedidos_info = db.scalar(
+        select(func.count()).select_from(InteracaoImovel).where(
+            InteracaoImovel.tipo == "pedido_info",
+            InteracaoImovel.estado == "pendente",
+            InteracaoImovel.imovel_versao_id.in_(versao_sub),
+        )
+    ) or 0
+
+    notas = db.scalar(
+        select(func.count()).select_from(NotaClienteImovel).where(
+            NotaClienteImovel.autor_tipo == "cliente",
+            NotaClienteImovel.lida_pelo_destinatario.is_(False),
+            NotaClienteImovel.cliente_id.in_(cliente_sub),
+        )
+    ) or 0
+
+    recentes_rows = db.scalars(
+        select(InteracaoImovel)
+        .where(InteracaoImovel.imovel_versao_id.in_(versao_sub))
+        .order_by(InteracaoImovel.criado_em.desc())
+        .limit(5)
+    ).all()
+    recentes: list[dict] = []
+    for r in recentes_rows:
+        versao = db.get(ImovelVersao, r.imovel_versao_id)
+        cliente = db.get(Cliente, r.cliente_id)
+        recentes.append({
+            "id": r.id,
+            "cliente_id": r.cliente_id,
+            "cliente_nome": cliente.nome if cliente else "",
+            "imovel_versao_id": r.imovel_versao_id,
+            "imovel_titulo": versao.titulo if versao else None,
+            "imovel_estado": versao.estado_imovel if versao else None,
+            "tipo": r.tipo,
+            "estado": r.estado,
+            "payload": r.payload,
+            "lida_pelo_consultor": r.lida_pelo_consultor,
+            "lida_pelo_cliente": r.lida_pelo_cliente,
+            "criado_em": r.criado_em.isoformat(),
+            "atualizado_em": r.atualizado_em.isoformat(),
+        })
+
+    return {
+        "interesses_nao_vistos": interesses,
+        "pedidos_pendentes": pedidos,
+        "pedidos_info_pendentes": pedidos_info,
+        "notas_nao_lidas": notas,
+        "recentes": recentes,
+    }

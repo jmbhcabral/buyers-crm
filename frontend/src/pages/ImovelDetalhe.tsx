@@ -21,19 +21,22 @@ import {
   FileText as FileIcon,
   Download,
   Calendar,
+  MessageCircle,
 } from 'lucide-react'
 import FormImovel from '@/components/imovel/FormImovel'
 import SnapshotCanonico from '@/components/imovel/SnapshotCanonico'
 import GaleriaFotos from '@/components/imovel/GaleriaFotos'
 import ClientesAssociados from '@/components/imovel/ClientesAssociados'
 import { notify } from '@/lib/toast'
+import { EstadoImovelSelect } from '@/components/imovel/EstadoImovelSelect'
+import { SecaoInteracoesImovel } from '@/components/imovel/SecaoInteracoesImovel'
 
 export default function ImovelDetalhe() {
   const { id } = useParams()
   const versaoId = Number(id)
 
   const { data: imovel, isLoading, isError } = useImovel(versaoId)
-  const { data: clientes } = useClientes()          // todos os clientes do consultor
+  const { data: clientes } = useClientes()
   const { data: pdfsDoImovel } = usePdfs({ imovelId: versaoId })
   const gerar = useGerarPdf(versaoId)
 
@@ -94,7 +97,13 @@ export default function ImovelDetalhe() {
             <h1 className="text-2xl font-bold line-clamp-2">
               {imovel.titulo || 'Sem título'}
             </h1>
-            <p className="text-muted-foreground">
+            <div className="mt-2">
+              <EstadoImovelSelect
+                versaoId={imovel.id}
+                estado={imovel.estado_imovel}
+              />
+            </div>
+            <p className="text-muted-foreground mt-1">
               ID: {imovel.canonico.property_id}
             </p>
           </div>
@@ -114,7 +123,7 @@ export default function ImovelDetalhe() {
         )}
       </div>
 
-      {/* Ações — Gerar PDF */}
+      {/* Gerar PDF */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
@@ -160,11 +169,13 @@ export default function ImovelDetalhe() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <FormImovel key={imovel.id} imovel={imovel} />
-          <GaleriaFotos fotos={imovel.canonico.fotos ?? []} imovelId={versaoId} />
+          <GaleriaFotos
+            fotos={imovel.canonico.fotos ?? []}
+            imovelId={versaoId}
+          />
         </div>
 
         <div className="space-y-6">
-          {/* PDFs gerados */}
           {pdfsDoImovel && pdfsDoImovel.length > 0 && (
             <Card>
               <CardHeader>
@@ -188,7 +199,9 @@ export default function ImovelDetalhe() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => descarregarPdf(pdf.id, pdf.nome_ficheiro)}
+                      onClick={() =>
+                        descarregarPdf(pdf.id, pdf.nome_ficheiro)
+                      }
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -202,6 +215,19 @@ export default function ImovelDetalhe() {
           <SnapshotCanonico canonico={imovel.canonico} />
         </div>
       </div>
+
+      {/* Interações — Card full-width abaixo do grid */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            Interações neste imóvel
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SecaoInteracoesImovel versaoId={imovel.id} />
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -3,10 +3,18 @@ import { useCliente } from '@/hooks/use-cliente'
 import { useImoveisDoCliente } from '@/hooks/use-imoveis-do-cliente'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, ArrowLeft, Building2 } from 'lucide-react'
+import {
+  Loader2,
+  ArrowLeft,
+  Building2,
+  MessageCircle,
+  StickyNote,
+} from 'lucide-react'
 import FormCliente from '@/components/cliente/FormCliente'
 import LinkCliente from '@/components/cliente/LinkCliente'
 import GestaoImoveisDoLink from '@/components/cliente/GestaoImoveisDoLink'
+import { SecaoInteracoes } from '@/components/cliente/SecaoInteracoes'
+import { SecaoNotas } from '@/components/cliente/SecaoNotas'
 
 export default function ClienteDetalhe() {
   const { id } = useParams()
@@ -56,6 +64,7 @@ export default function ClienteDetalhe() {
         )}
       </div>
 
+      {/* Grid principal: form (2/3) + sidebar (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <FormCliente key={cliente.id} cliente={cliente} />
@@ -97,6 +106,32 @@ export default function ClienteDetalhe() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Interações e Notas — fora do grid, largura total */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              Interações
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SecaoInteracoes clienteId={cliente.id} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <StickyNote className="h-4 w-4" />
+              Notas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SecaoNotas clienteId={cliente.id} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

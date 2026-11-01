@@ -66,6 +66,10 @@ class ImovelVersao(Base, PKMixin, TimestampMixin):
     # Campos exclusivos do consultor
     notas_internas: Mapped[str | None] = mapped_column(Text)
 
+    estado_imovel: Mapped[str] = mapped_column(
+    String(32), default="disponivel", nullable=False, index=True,
+)
+
     # Controle de sincronização
     campos_alterados: Mapped[dict[str, bool] | None] = mapped_column(JSONB, default=dict)
     tem_conflitos: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -145,6 +145,12 @@ Existem funcionalidades para carregar e remover a fotografia do consultor e um e
 
 Antes de qualquer alteração ao modelo de dados, devem ser consultados os modelos SQLAlchemy, schemas e migrações Alembic existentes.
 
+- `ImovelVersao.estado_imovel` — estado comercial por versão.
+- `InteracaoImovel` — interesse/pedido de visita/pedido de info do cliente
+  por imóvel. `tipo` + `estado` (pendente/visto/concluido/cancelado).
+- `NotaClienteImovel` — thread de mensagens cliente↔consultor, opcionalmente
+  ancorada a um imóvel. Marcação de leitura por destinatário.
+
 5. Endpoints documentados
 
 A lista seguinte é baseada na documentação do projecto. Deve ser confirmada no código antes de qualquer alteração.

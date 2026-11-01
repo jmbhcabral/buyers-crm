@@ -89,6 +89,7 @@ export interface ImovelVersaoListItem {
   num_fotos: number
   num_clientes: number
   primeira_foto_id: number | null
+  estado_imovel: EstadoImovel
 }
 
 export interface ImovelVersao {
@@ -109,6 +110,7 @@ export interface ImovelVersao {
   sincronizado_em: string | null
   criado_em: string
   atualizado_em: string
+  estado_imovel: EstadoImovel
 }
 
 // ===========================================================================
@@ -306,6 +308,7 @@ export interface LinkImovel {
   localizacao: string[] | null
   num_fotos: number
   criado_em: string
+  estado_imovel: EstadoImovel
 }
 
 export interface LinkComDetalhes extends Link {
@@ -336,4 +339,63 @@ export interface LinkAnalytics {
   ultimo_acesso_em: string | null
   por_imovel: ImovelAnalytics[]
   acessos_recentes: LinkAcesso[]
+}
+
+// ===========================================================================
+// Estado do imóvel / Interações / Notas
+// ===========================================================================
+
+export type EstadoImovel =
+  | 'disponivel'
+  | 'reservado'
+  | 'cpcv'
+  | 'escritura_marcada'
+  | 'vendido'
+  | 'saiu_mercado'
+
+export type TipoInteracao = 'interesse' | 'pedido_visita' | 'pedido_info'
+export type EstadoInteracao = 'pendente' | 'visto' | 'concluido' | 'cancelado'
+export type AutorTipo = 'cliente' | 'consultor'
+
+export interface Interacao {
+  id: number
+  cliente_id: number
+  imovel_versao_id: number
+  tipo: TipoInteracao
+  estado: EstadoInteracao
+  payload: Record<string, unknown> | null
+  lida_pelo_consultor: boolean
+  lida_pelo_cliente: boolean
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface InteracaoComContexto extends Interacao {
+  cliente_nome: string
+  imovel_titulo: string | null
+  imovel_estado: EstadoImovel | null
+}
+
+export interface Nota {
+  id: number
+  cliente_id: number
+  imovel_versao_id: number | null
+  autor_tipo: AutorTipo
+  autor_user_id: number | null
+  conteudo: string
+  lida_pelo_destinatario: boolean
+  criado_em: string
+}
+
+export interface NotaComContexto extends Nota {
+  autor_nome: string | null
+  imovel_titulo: string | null
+}
+
+export interface DashboardInteracoesPendentes {
+  interesses_nao_vistos: number
+  pedidos_pendentes: number
+  pedidos_info_pendentes: number
+  notas_nao_lidas: number
+  recentes: InteracaoComContexto[]
 }
