@@ -491,16 +491,19 @@ def listar_notas_publicas(
     token: str,
     response: Response,
     db: DbSession,
-    imovel_versao_id: int | None = None,
+    imovel_versao_id: int,                      
 ) -> list[NotaRead]:
     _no_cache(response)
     link = _obter_link_valido(db, token)
-    stmt = select(NotaClienteImovel).where(
-        NotaClienteImovel.cliente_id == link.cliente_id
+    _validar_imovel_no_link(db, link, imovel_versao_id)
+    stmt = (
+        select(NotaClienteImovel)
+        .where(
+            NotaClienteImovel.cliente_id == link.cliente_id,
+            NotaClienteImovel.imovel_versao_id == imovel_versao_id,
+        )
+        .order_by(NotaClienteImovel.criado_em)
     )
-    if imovel_versao_id is not None:
-        stmt = stmt.where(NotaClienteImovel.imovel_versao_id == imovel_versao_id)
-    stmt = stmt.order_by(NotaClienteImovel.criado_em)
     return [NotaRead.model_validate(n) for n in db.scalars(stmt).all()]
 
 
@@ -516,8 +519,8 @@ def criar_nota_publica(
     db: DbSession,
 ) -> NotaRead:
     link = _obter_link_valido(db, token)
-    if payload.imovel_versao_id is not None:
-        _validar_imovel_no_link(db, link, payload.imovel_versao_id)
+    _validar_imovel_no_link(db, link, payload.imovel_versao_id)  
+
     nota = NotaClienteImovel(
         cliente_id=link.cliente_id,
         imovel_versao_id=payload.imovel_versao_id,

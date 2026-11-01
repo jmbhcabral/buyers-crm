@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useCliente } from '@/hooks/use-cliente'
 import { useImoveisDoCliente } from '@/hooks/use-imoveis-do-cliente'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,12 @@ import { SecaoNotas } from '@/components/cliente/SecaoNotas'
 
 export default function ClienteDetalhe() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const clienteId = Number(id)
+  const imovelFromUrl = searchParams.get('imovel')
+    ? Number(searchParams.get('imovel'))
+    : undefined
+
   const { data: cliente, isLoading, isError } = useCliente(clienteId)
   const { data: imoveis } = useImoveisDoCliente(clienteId)
 
@@ -64,7 +69,6 @@ export default function ClienteDetalhe() {
         )}
       </div>
 
-      {/* Grid principal: form (2/3) + sidebar (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <FormCliente key={cliente.id} cliente={cliente} />
@@ -108,7 +112,6 @@ export default function ClienteDetalhe() {
         </div>
       </div>
 
-      {/* Interações e Notas — fora do grid, largura total */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -129,7 +132,11 @@ export default function ClienteDetalhe() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <SecaoNotas clienteId={cliente.id} />
+            <SecaoNotas
+              clienteId={cliente.id}
+              imoveis={imoveis ?? []}
+              imovelVersaoIdInicial={imovelFromUrl}
+            />
           </CardContent>
         </Card>
       </div>

@@ -390,6 +390,7 @@ export interface Nota {
 export interface NotaComContexto extends Nota {
   autor_nome: string | null
   imovel_titulo: string | null
+  cliente_nome: string | null
 }
 
 export interface DashboardInteracoesPendentes {

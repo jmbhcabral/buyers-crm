@@ -26,12 +26,12 @@ class PedidoCreate(BaseModel):
 
 
 class NotaCreatePublic(BaseModel):
-    imovel_versao_id: int | None = None
+    imovel_versao_id: int
     conteudo: str = Field(..., min_length=1, max_length=4000)
 
 
 class NotaCreateCRM(BaseModel):
-    imovel_versao_id: int | None = None
+    imovel_versao_id: int
     conteudo: str = Field(..., min_length=1, max_length=4000)
 
 
@@ -81,6 +81,7 @@ class NotaRead(BaseModel):
 class NotaComContexto(NotaRead):
     autor_nome: str | None = None
     imovel_titulo: str | None = None
+    cliente_nome: str | None = None
 
 
 class InteracoesResumo(BaseModel):

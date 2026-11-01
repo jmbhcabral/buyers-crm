@@ -108,7 +108,7 @@ def listar_notas_cliente(
     consultor: ConsultorOpcional,
     imovel_versao_id: int | None = None,
 ) -> list[NotaComContexto]:
-    _acesso_cliente(db, cliente_id, user, consultor)
+    cliente = _acesso_cliente(db, cliente_id, user, consultor)
     stmt = select(NotaClienteImovel).where(
         NotaClienteImovel.cliente_id == cliente_id
     )
@@ -131,6 +131,7 @@ def listar_notas_cliente(
                 **NotaRead.model_validate(n).model_dump(),
                 autor_nome=autor_nome,
                 imovel_titulo=titulo,
+                cliente_nome=cliente.nome,        # NOVO
             )
         )
     return out
@@ -149,8 +150,7 @@ def criar_nota_crm(
     consultor: ConsultorOpcional,
 ) -> NotaRead:
     _acesso_cliente(db, cliente_id, user, consultor)
-    if payload.imovel_versao_id is not None:
-        _acesso_versao(db, payload.imovel_versao_id, user, consultor)
+    _acesso_versao(db, payload.imovel_versao_id, user, consultor)   # sempre
 
     nota = NotaClienteImovel(
         cliente_id=cliente_id,
@@ -241,11 +241,13 @@ def listar_notas_imovel(
         if n.autor_tipo == "consultor" and n.autor_user_id:
             u = db.get(User, n.autor_user_id)
             autor_nome = u.nome if u else None
+        cliente = db.get(Cliente, n.cliente_id)
         out.append(
             NotaComContexto(
                 **NotaRead.model_validate(n).model_dump(),
                 autor_nome=autor_nome,
                 imovel_titulo=None,
+                cliente_nome=cliente.nome if cliente else None,   # NOVO
             )
         )
     return out
