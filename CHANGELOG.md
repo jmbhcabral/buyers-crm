@@ -1,5 +1,37 @@
 Buyers CRM — CHANGELOG
 
+2026-11-01 — Administração: criar consultor e alterar credenciais
+
+Backend
+- POST /api/admin/consultores — cria User + Consultor numa transação.
+  Valida email único (409 se duplicado) e faz hash bcrypt da password.
+  Aceita is_admin opcional para criar co-admins.
+- PUT /api/admin/consultores/{consultor_id}/credenciais — admin redefine
+  email e/ou password de um consultor sem exigir a password atual.
+- PUT /api/me/password — o próprio utilizador altera a password; exige
+  current_password, rejeita nova igual à atual.
+- Novos schemas em app/schemas/admin.py
+  (ConsultorAdminCreate, ConsultorAdminCredenciaisUpdate,
+  PasswordChangeSelf).
+- Novo router app/routers/admin_consultores.py registado em main.py.
+- Testes em backend/tests/test_admin_consultores.py.
+
+Frontend
+- Admin: tab "Consultores" ganha botão "Novo consultor" e coluna
+  "Ações" com diálogo de credenciais por linha.
+- Perfil: novo componente FormAlterarPassword (pede password atual,
+  confirmação, faz logout e redirect após sucesso).
+- Hooks novos: use-admin-consultores.ts (criar, alterar credenciais)
+  e useAlterarMinhaPassword em use-me.ts.
+- Tipos ConsultorAdminCreate e ConsultorAdminCredenciaisUpdate.
+
+Notas
+- Sem migração Alembic: users.is_admin e users.ativo já existiam desde
+  a migração inicial 66a7820b5d89.
+- JWT continuam stateless: troca de password não invalida tokens já
+  emitidos. O frontend força logout. Invalidação server-side fica em
+  TODO (User.token_version / password_changed_at).
+
 2026-11-01 — Notas por imóvel (fix)
 
 Corrigido bug em que notas criadas no CRM não apareciam no modal do

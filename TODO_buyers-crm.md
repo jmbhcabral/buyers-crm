@@ -71,3 +71,11 @@ Infraestrutura
 - Configurar backups off-site (disco externo e/ou nuvem).
 - Testar recuperação de backups.
 - Criar script de deploy (./deploy.sh).
+
+Administração
+- Invalidação server-side de tokens após alteração de password
+  (User.token_version ou password_changed_at validado em get_current_user).
+- PATCH /admin/consultores/{id} com ativo (desativar sem apagar).
+- Criar co-admin via UI (checkbox is_admin no diálogo de novo consultor).
+- Auditoria persistente (admin_audit_log) para criação/alteração de
+  credenciais.

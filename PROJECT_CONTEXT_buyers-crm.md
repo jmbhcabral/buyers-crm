@@ -255,7 +255,17 @@ Existem também endpoints para:
 * Fotografias.
 * Geração de PDFs.
 * Dashboard (inclui /dashboard/interacoes-pendentes).
-* Administração.
+* Administração (todos sob `Depends(get_admin_user)`):
+  * GET   /admin/stats
+  * GET   /admin/consultores
+  * POST  /admin/consultores
+  * PUT   /admin/consultores/{id}/credenciais
+  * GET   /admin/canonicos
+  * GET   /admin/versoes
+  * GET   /admin/historico
+  * GET   /admin/pdfs
+* Conta própria (qualquer utilizador autenticado):
+  * PUT   /me/password
 * Links públicos (ver secção 5).
 
 Prefixo geral documentado: /api.
