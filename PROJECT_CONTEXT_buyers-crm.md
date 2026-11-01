@@ -57,21 +57,51 @@ O Buyers CRM já se encontra instalado e operacional num servidor doméstico com
 
 As duas aplicações estão acessíveis através dos respectivos subdomínios:
 
-* CRM privado: crm.chanilaicastro.pt
-* Aplicação pública: imoveis.chanilaicastro.pt
+* CRM privado: `crm.chanilaicastro.pt`
+* Aplicação pública: `imoveis.chanilaicastro.pt`
 
 O servidor utiliza Docker para executar os serviços da aplicação e a infraestrutura de encaminhamento está operacional.
 
-Existe também um script de gestão no servidor, utilizado para arrancar/subir os serviços Docker e possivelmente executar outras operações de manutenção.
+#### Gestão de serviços no servidor
 
-Script de gestão:
+A gestão dos serviços de produção **não é feita por um script**, mas sim por um **alias de shell** definido em `/home/jorge/.bashrc` (linha 118):
 
-* Nome: por identificar.
-* Localização: por identificar.
-* Comandos disponíveis: por identificar.
-* Forma de execução: por confirmar.
+```bash
+alias dcp="docker compose --env-file ~/projects/buyers-crm/.env.prod -f ~/projects/buyers-crm/docker-compose.prod.yml"
+```
 
-Não criar outro script de gestão antes de identificar e analisar o script existente.
+- Localização do repositório no servidor: `~/projects/buyers-crm` (i.e. `/home/jorge/projects/buyers-crm`).
+- Não existe nenhum ficheiro `dcp*` nem `*docker*.sh` no home do utilizador (confirmado por `find` em 2026-11-01).
+- O alias `dcp` deve ser usado em vez de `docker compose` directamente no servidor, para garantir que o `.env.prod` e o compose de produção correctos são utilizados.
+
+Exemplos de uso:
+
+```bash
+dcp ps               # listar contentores do Buyers CRM
+dcp logs -f backend  # acompanhar logs do backend
+dcp up -d            # arrancar/actualizar serviços
+dcp down             # parar serviços
+dcp restart backend  # reiniciar um serviço específico
+```
+
+**Não criar outro script de gestão.** O fluxo de gestão existente é o alias `dcp`; qualquer alteração deve ser feita editando o alias em `~/.bashrc`.
+
+#### Estado observado dos contentores (2026-11-01)
+
+Saída de `dcp ps`:
+
+| Contentor | Imagem | Serviço | Estado |
+|---|---|---|---|
+| `buyers_crm_backend` | `buyers-crm-backend` | backend | Up 11 hours |
+| `buyers_crm_db` | `postgres:16-alpine` | db | Up 43 hours (healthy) |
+| `buyers_crm_frontend` | `buyers-crm-frontend` | frontend | Up 7 hours |
+| `buyers_crm_frontend_public` | `sha256:b846…` | frontend-public | Up 8 hours |
+
+`docker compose ls` no servidor revela três stacks Docker em execução:
+
+- **`buyers-crm`** — a aplicação. Compose em `/home/jorge/projects/buyers-crm/docker-compose.prod.yml`.
+- **`traefik`** — reverse proxy / TLS. Compose em `/home/jorge/docker/traefik/docker-compose.yml`.
+- **`monitoring`** — stack de monitorização. Compose em `/home/jorge/docker/monitoring/docker-compose.yml`. Estado à data: 1 serviço a reiniciar (`restarting`) e 2 em execução. Verificar se o `restarting` é esperado.
 
 ## 3. Arquitectura e componentes
 
@@ -262,6 +292,8 @@ cd frontend-public && pnpm build
 - Migrações Alembic executadas no arranque do backend.
 - Volumes persistentes `postgres_data`, `fotos_storage`, `pdfs_storage`, `consultores_storage`.
 
+No servidor de produção, usar sempre o alias `dcp` (ver secção 2) em vez de `docker compose` directamente.
+
 **Não executar comandos de produção nem alterar DNS/Traefik sem confirmar primeiro o estado do servidor e o plano de deploy.**
 
 ## 8. Estado e alterações recentes observáveis no Git
@@ -321,7 +353,7 @@ Nota: parte deste roadmap pode já ter sido implementada desde a escrita do READ
 2. Inspeccionar os routers e schemas backend relacionados com páginas públicas, tokens/links e expiração.
 3. Confirmar se os links públicos têm validade limitada ou se essa funcionalidade ainda está por implementar.
 4. Verificar o estado real dos testes e executar lint/build antes de grandes alterações.
-5. Verificar o estado do servidor Ubuntu, Docker, Traefik e Cloudflare Tunnel antes de qualquer deploy.
+5. Verificar o estado do servidor Ubuntu, Docker, Traefik, Cloudflare Tunnel e da stack `monitoring` (que tinha 1 serviço em `restarting` a 2026-11-01) antes de qualquer deploy.
 6. Rever a discrepância entre README e implementação recente, actualizando a documentação quando o comportamento estiver confirmado.
 7. Confirmar se o utilizador tem alterações locais não enviadas para Git; o repositório remoto apenas mostra commits publicados.
 
@@ -337,6 +369,7 @@ Nota: parte deste roadmap pode já ter sido implementada desde a escrita do READ
 - Considerar autenticação e autorização em todos os endpoints privados; endpoints públicos devem expor apenas os dados necessários.
 - Nunca incluir segredos reais em commits. Usar `.env` local e manter `.env.example` sem credenciais.
 - Não executar alterações destrutivas, deploy, migrações em produção ou alterações DNS sem confirmação explícita.
+- Em produção, usar o alias `dcp` (não criar outro script de gestão).
 - Após cada alteração: executar os testes/lint/build relevantes, resumir ficheiros alterados e sugerir uma mensagem de commit.
 - Actualizar `PROJECT_CONTEXT.md`, `TODO.md` e `CHANGELOG.md` quando o estado do projecto mudar de forma relevante.
 
