@@ -131,7 +131,7 @@ def listar_notas_cliente(
                 **NotaRead.model_validate(n).model_dump(),
                 autor_nome=autor_nome,
                 imovel_titulo=titulo,
-                cliente_nome=cliente.nome,        # NOVO
+                cliente_nome=cliente.nome,      
             )
         )
     return out
@@ -150,7 +150,7 @@ def criar_nota_crm(
     consultor: ConsultorOpcional,
 ) -> NotaRead:
     _acesso_cliente(db, cliente_id, user, consultor)
-    _acesso_versao(db, payload.imovel_versao_id, user, consultor)   # sempre
+    _acesso_versao(db, payload.imovel_versao_id, user, consultor) 
 
     nota = NotaClienteImovel(
         cliente_id=cliente_id,
@@ -247,7 +247,7 @@ def listar_notas_imovel(
                 **NotaRead.model_validate(n).model_dump(),
                 autor_nome=autor_nome,
                 imovel_titulo=None,
-                cliente_nome=cliente.nome if cliente else None,   # NOVO
+                cliente_nome=cliente.nome if cliente else None, 
             )
         )
     return out

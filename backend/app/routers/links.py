@@ -247,6 +247,7 @@ def _build_link_detalhes(db: DbSession, link: LinkCliente) -> LinkComDetalhes:
                 localizacao=versao.localizacao,
                 num_fotos=num_fotos,
                 criado_em=li.criado_em,
+                estado_imovel=versao.estado_imovel
             )
         )
 
