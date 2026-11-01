@@ -2,27 +2,6 @@ Buyers CRM — TODO
 
 Última atualização: 2026-11-01
 
-Progresso
-
-* Foto, nome, agência e contactos do consultor no cabeçalho público.
-* Thumbnail real na lista de imóveis do CRM.
-* Favicon e Open Graph na aplicação pública.
-* Marcar imóvel como favorito (cliente → consultor vê).
-* Notificar o consultor quando o cliente abre o link.
-* Pedido de visita na aplicação pública.
-* Exportar CSV de imóveis e clientes.
-* Filtros e pesquisa na aplicação pública.
-* Marcar imóvel como vendido/reservado.
-* Validação de formulários com react-hook-form + Zod.
-* Melhorar a responsividade mobile do CRM (sidebar colapsável).
-* Dark mode na aplicação pública.
-* Testes automatizados.
-* Backups off-site (disco externo e/ou nuvem).
-* Script de deploy (./deploy.sh).
-* Multi-consultor com partilha.
-* Landing page para o site principal.
-* PWA (instalação no telemóvel).
-
 Próxima tarefa — Favoritos
 
 Permitir que um cliente marque imóveis como favoritos na aplicação pública e que o consultor consiga consultar essa seleção no CRM.
@@ -52,3 +31,48 @@ Cuidados técnicos
 * Impedir favoritos duplicados na base de dados.
 * Validar no backend as permissões associadas ao link/token.
 * Não depender apenas do armazenamento local do browser.
+
+⸻
+
+Funcionalidades e melhorias pendentes
+
+CRM e gestão de imóveis
+
+* Marcar imóvel como vendido/reservado.
+* Marcar visitar imóvel.
+* Exportar CSV de imóveis e clientes.
+* Validação de formulários com react-hook-form + Zod.
+* Melhorar a responsividade mobile do CRM (sidebar colapsável).
+
+Aplicação pública
+
+* Filtros e pesquisa na aplicação pública.
+* Dark mode na aplicação pública.
+* Pedido de visita na aplicação pública.
+* PWA (instalação no telemóvel).
+
+Clientes e consultores
+
+* Notificar o consultor quando o cliente abre o link.
+* Multi-consultor com partilha.
+
+Marketing e presença online
+
+* Landing page para o site principal.
+
+Qualidade e manutenção
+
+* Testes automatizados.
+
+Infraestrutura
+
+* Validar o funcionamento do filtro por labels do Watchtower.✅
+* Investigar os avisos relativos à imagem local buyers-crm-frontend-public:latest.✅
+* Confirmar a origem e manutenção da imagem nickfedor/watchtower.✅
+* Confirmar que apenas Portainer e Uptime Kuma são elegíveis para actualizações automáticas.✅
+* Configurar alertas no Uptime Kuma.
+* Implementar backups automáticos do PostgreSQL.
+* Implementar backups dos volumes persistentes.
+* Configurar backups off-site (disco externo e/ou nuvem).
+* Testar recuperação de backups.
+* Criar script de deploy (./deploy.sh).
