@@ -51,6 +51,28 @@ O projecto é usado no contexto da actividade imobiliária de Jorge e Chanilai. 
 - Volumes persistentes para PostgreSQL, fotos, PDFs e fotografias dos consultores.
 - Produção configurada para integrar numa rede Docker externa `traefik-net`, com labels Traefik.
 
+### Estado real do ambiente de produção (confirmado em 2026-11-01)
+
+O Buyers CRM já se encontra instalado e operacional num servidor doméstico com Ubuntu Server.
+
+As duas aplicações estão acessíveis através dos respectivos subdomínios:
+
+* CRM privado: crm.chanilaicastro.pt
+* Aplicação pública: imoveis.chanilaicastro.pt
+
+O servidor utiliza Docker para executar os serviços da aplicação e a infraestrutura de encaminhamento está operacional.
+
+Existe também um script de gestão no servidor, utilizado para arrancar/subir os serviços Docker e possivelmente executar outras operações de manutenção.
+
+Script de gestão:
+
+* Nome: por identificar.
+* Localização: por identificar.
+* Comandos disponíveis: por identificar.
+* Forma de execução: por confirmar.
+
+Não criar outro script de gestão antes de identificar e analisar o script existente.
+
 ## 3. Arquitectura e componentes
 
 ### Fluxo de captação
