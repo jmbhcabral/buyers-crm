@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Phone, Mail } from 'lucide-react'
 import type { ConsultorPublic } from '../types'
 
 interface Props {
@@ -27,47 +28,61 @@ export function Layout({ children, consultor }: Props) {
       <header className="bg-primary text-white shadow-md sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-6">
           {consultor ? (
-            <div className="flex items-center gap-4">
-              {/* Foto (80px) */}
-              <div className="w-20 h-20 rounded-full overflow-hidden bg-primary-light flex items-center justify-center text-xl font-semibold shrink-0 ring-2 ring-white/20">
-                {consultor.foto_url ? (
-                  <img
-                    key={consultor.foto_url}
-                    src={consultor.foto_url}
-                    alt={consultor.nome}
-                    className="w-full h-full object-cover object-top"
-                  />
-                ) : (
-                  iniciais
-                )}
-              </div>
-
-              {/* Nome + Agência (centro) */}
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold leading-tight truncate">
-                  {consultor.nome}
-                </p>
-                {consultor.agencia && (
-                  <p className="text-sm text-blue-100 leading-tight truncate mt-0.5">
-                    {consultor.agencia}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+              {/* Foto + Nome + Agência */}
+              <div className="flex items-center gap-4 sm:flex-1 min-w-0">
+                <div className="w-20 h-20 rounded-full overflow-hidden bg-primary-light flex items-center justify-center text-xl font-semibold shrink-0 ring-2 ring-white/20">
+                  {consultor.foto_url ? (
+                    <img
+                      key={consultor.foto_url}
+                      src={consultor.foto_url}
+                      alt={consultor.nome}
+                      className="w-full h-full object-cover object-top"
+                    />
+                  ) : (
+                    iniciais
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="text-base font-semibold leading-tight"
+                    title={consultor.nome}
+                  >
+                    {consultor.nome}
                   </p>
-                )}
+                  {consultor.agencia && (
+                    <p
+                      className="text-sm text-blue-100 leading-tight mt-0.5"
+                      title={consultor.agencia}
+                    >
+                      {consultor.agencia}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {/* Contactos (direita) */}
-              <div className="text-right text-xs text-blue-100 shrink-0 space-y-1">
+              {/* Contactos: linha em mobile, coluna em sm+ */}
+              <div className="flex sm:flex-col gap-3 sm:gap-1.5 text-xs sm:text-sm text-blue-100 sm:text-right">
                 {consultor.telefone && (
-                  <p className="font-medium tabular-nums">
-                    {formatarTelefone(consultor.telefone)}
-                  </p>
+                  <a
+                    href={`tel:${consultor.telefone.replace(/\s/g, '')}`}
+                    className="flex items-center gap-1.5 hover:text-white transition-colors"
+                  >
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span className="tabular-nums">
+                      {formatarTelefone(consultor.telefone)}
+                    </span>
+                  </a>
                 )}
                 {consultor.email && (
-                  <p
-                    className="truncate max-w-[180px]"
+                  <a
+                    href={`mailto:${consultor.email}`}
+                    className="flex items-center gap-1.5 hover:text-white transition-colors min-w-0"
                     title={consultor.email}
                   >
-                    {consultor.email}
-                  </p>
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{consultor.email}</span>
+                  </a>
                 )}
               </div>
             </div>
