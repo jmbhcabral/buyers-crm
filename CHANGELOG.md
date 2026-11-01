@@ -1,64 +1,77 @@
 Buyers CRM — CHANGELOG
 
-2026-11-01
+2026-11-01 — Notas por imóvel (fix)
 
-Infraestrutura — Monitoring
+Corrigido bug em que notas criadas no CRM não apareciam no modal do
+cliente. Causa: o CRM enviava imovel_versao_id=null e o modal público
+filtra por imóvel — logo, nunca havia match.
 
-* Alterada a imagem do Watchtower para nickfedor/watchtower:latest.
-* Configurado WATCHTOWER_LABEL_ENABLE=true.
-* Configurado WATCHTOWER_CLEANUP=true.
-* Configurado agendamento diário às 04:00 UTC.
-* Configurado timeout de 60 segundos.
-* Adicionadas labels de elegibilidade ao Portainer e Uptime Kuma.
-* Adicionada label de exclusão ao próprio Watchtower.
-* Validada a sintaxe do Docker Compose com docker compose config --quiet.
-* Reiniciados os containers Portainer, Uptime Kuma e Watchtower.
-* Confirmado que os três containers arrancaram.
-* Confirmado que Uptime Kuma e Watchtower apresentam estado healthy.
+Alterações
+- imovel_versao_id obrigatório em NotaCreateCRM e NotaCreatePublic.
+- Endpoints de criação validam sempre o acesso ao imóvel (CRM) e a
+  presença do imóvel no link (público).
+- GET /api/public/links/{token}/notas passa a exigir imovel_versao_id.
+- NotaComContexto ganha cliente_nome (usado no agrupamento por
+  cliente no ImovelDetalhe).
+- SecaoNotas (CRM, ClienteDetalhe) exige seleção de imóvel; thread e
+  input são por imóvel.
+- Novo SecaoNotasImovel no ImovelDetalhe, agrupado por cliente, com
+  link direto para /clientes/{id}?imovel={versaoId}.
+- ClienteDetalhe lê ?imovel= do URL e usa-o como seleção inicial.
+- SecaoNotas deixou de usar useEffect para sincronizar o imóvel
+  selecionado. O valor efetivo é derivado a cada render
+  (userSelectedId → imovelVersaoIdInicial → imoveis[0] → null),
+  eliminando renders em cascata e o warning de setState em efeito.
+- Notas antigas (imovel_versao_id IS NULL) ficam visíveis num bucket
+  colapsável read-only no SecaoNotas, para não perder histórico.
 
-Diagnóstico
+Nota: sem migração nova. A coluna imovel_versao_id continua nullable
+para suportar registos anteriores a esta alteração.
 
-* Consultados os logs do Watchtower.
-* Confirmada a versão apresentada nos logs: 1.23.2.
-* Confirmado o agendamento seguinte para 2026-11-02 às 04:00 UTC.
-* Identificados avisos ao tentar obter informação da imagem local buyers-crm-frontend-public:latest.
+2026-11-01 — Interações cliente ↔ imóvel
 
-Nota: O funcionamento efectivo do filtro por labels e a origem/manutenção da imagem Watchtower continuam por validar. Consultar TODO.md.
-
-2026-11-01 — Validação
-
-* Confirmado, via docker inspect, que Portainer e Uptime Kuma têm
-  com.centurylinklabs.watchtower.enable=true.
-* Confirmado que o filtro por labels do Watchtower está operacional
-  conforme pretendido.
-
-
-## [Unreleased] — Interações cliente ↔ imóvel
-
-### Added
-- Campo `estado_imovel` em `ImovelVersao` (disponivel, reservado, cpcv,
+Backend
+- Campo estado_imovel em ImovelVersao (disponivel, reservado, cpcv,
   escritura_marcada, vendido, saiu_mercado). Editável no CRM.
-- Tabelas `interacoes_imovel` e `notas_cliente_imovel`.
-- Endpoints públicos:
-  - GET    /api/public/links/{token}/interacoes
-  - PUT    /api/public/links/{token}/imoveis/{id}/interesse
-  - POST   /api/public/links/{token}/imoveis/{id}/pedidos
-  - DELETE /api/public/links/{token}/interacoes/{id}
-  - GET    /api/public/links/{token}/notas
-  - POST   /api/public/links/{token}/notas
-  - PATCH  /api/public/links/{token}/notas/{id}/ler
-- Endpoints CRM:
-  - GET/POST /api/clientes/{id}/interacoes, /notas
-  - GET/POST /api/imoveis/{id}/interacoes, /notas
-  - PATCH    /api/interacoes/{id}
-  - PATCH    /api/notas/{id}/ler
-  - PATCH    /api/imoveis/{id}/estado
-  - GET      /api/dashboard/interacoes-pendentes
-- Frontend público: badge de estado, botões Interesse/Visita/Notas nos cards
-  e no detalhe, modal de pedido de visita, thread de notas.
-- Frontend CRM: selector de estado no detalhe do imóvel, secções de
-  interações e notas no detalhe do cliente, cartões de pendentes no dashboard.
+- Tabelas interacoes_imovel e notas_cliente_imovel, com índice único
+  parcial (cliente_id, imovel_versao_id) para "interesse".
+- Endpoints públicos: interesse, pedidos e notas por imóvel.
+- Endpoints CRM: interações e notas por cliente, interações e notas
+  por imóvel, atualização de estado de interação, marcação de nota
+  como lida, atualização do estado do imóvel.
+- Endpoint /api/dashboard/interacoes-pendentes.
+- estado_imovel exposto em PublicImovelItem, PublicImovelDetalhe,
+  LinkImovelRead e ImovelVersaoListItem.
 
-### Changed
-- `PublicImovelItem`, `PublicImovelDetalhe`, `LinkImovelRead` e
-  `ImovelVersaoListItem` incluem `estado_imovel`.
+Frontend público
+- Badge de estado do imóvel no card e no detalhe.
+- Ações Interesse / Visita / Notas com regras por estado (visita só
+  em "disponível"; interesse bloqueado em vendido e saiu_mercado).
+- Modais de pedido de visita e de notas.
+- Sticky bar de ações em mobile no detalhe.
+- Camada de estado em use-interacoes.ts com cache por token.
+
+Frontend CRM
+- Seletor de estado do imóvel no detalhe.
+- Secções de interações e notas no detalhe do cliente.
+- Secção de interações no detalhe do imóvel.
+- Cartões de pendentes e lista de atividade recente no dashboard.
+- Estado do imóvel visível na gestão de imóveis do link.
+
+2026-11-01 — Validação de monitoring
+
+- Confirmado, via docker inspect, que Portainer e Uptime Kuma têm
+  com.centurylinklabs.watchtower.enable=true.
+- Confirmado que o filtro por labels do Watchtower está operacional.
+
+2026-11-01 — Monitoring (infra)
+
+- Alterada a imagem do Watchtower para nickfedor/watchtower:latest.
+- WATCHTOWER_LABEL_ENABLE=true, WATCHTOWER_CLEANUP=true.
+- Agendamento diário às 04:00 UTC, timeout 60s.
+- Labels de elegibilidade em Portainer e Uptime Kuma.
+- Label de exclusão no próprio Watchtower.
+- docker compose config --quiet validado.
+- Confirmado o agendamento seguinte para 2026-11-02 às 04:00 UTC.
+- Identificados avisos ao obter informação da imagem local
+  buyers-crm-frontend-public:latest.
