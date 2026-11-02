@@ -43,3 +43,14 @@ export function useApagarFotoPerfil() {
     },
   })
 }
+
+export function useAlterarMinhaPassword() {
+  return useMutation({
+    mutationFn: async (payload: {
+      current_password: string
+      new_password: string
+    }) => {
+      await api.put('/me/password', payload)
+    },
+  })
+}

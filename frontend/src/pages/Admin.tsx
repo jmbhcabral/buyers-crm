@@ -35,6 +35,19 @@ import {
   History,
   AlertTriangle,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  useCriarConsultorAdmin,
+  useAlterarCredenciaisConsultor,
+} from '@/hooks/use-admin-consultores'
 
 type Tab = 'stats' | 'consultores' | 'canonicos' | 'versoes' | 'historico' | 'pdfs'
 
@@ -122,51 +135,258 @@ function StatsTab() {
 
 function ConsultoresTab() {
   const { data, isLoading } = useAdminConsultores()
+  const [novoOpen, setNovoOpen] = useState(false)
+  const [credOpen, setCredOpen] = useState<{ id: number; nome: string } | null>(null)
+
   if (isLoading) return <Loading />
   if (!data) return null
 
   return (
-    <Card>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Telefone</TableHead>
-            <TableHead className="text-center">Imóveis</TableHead>
-            <TableHead className="text-center">Clientes</TableHead>
-            <TableHead className="text-center">PDFs</TableHead>
-            <TableHead className="text-center">Estado</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((c) => (
-            <TableRow key={c.id}>
-              <TableCell className="font-medium">
-                {c.nome}
-                {c.is_admin && (
-                  <Badge variant="secondary" className="ml-2 text-xs">
-                    admin
-                  </Badge>
-                )}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">{c.email}</TableCell>
-              <TableCell className="text-sm">{c.telefone || '—'}</TableCell>
-              <TableCell className="text-center">{c.num_imoveis}</TableCell>
-              <TableCell className="text-center">{c.num_clientes}</TableCell>
-              <TableCell className="text-center">{c.num_pdfs}</TableCell>
-              <TableCell className="text-center">
-                {c.ativo ? (
-                  <Badge variant="secondary">ativo</Badge>
-                ) : (
-                  <Badge variant="destructive">inativo</Badge>
-                )}
-              </TableCell>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={() => setNovoOpen(true)}>Novo consultor</Button>
+      </div>
+
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Telefone</TableHead>
+              <TableHead className="text-center">Imóveis</TableHead>
+              <TableHead className="text-center">Clientes</TableHead>
+              <TableHead className="text-center">PDFs</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Card>
+          </TableHeader>
+          <TableBody>
+            {data.map((c) => (
+              <TableRow key={c.id}>
+                <TableCell className="font-medium">
+                  {c.nome}
+                  {c.is_admin && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      admin
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {c.email}
+                </TableCell>
+                <TableCell className="text-sm">{c.telefone || '—'}</TableCell>
+                <TableCell className="text-center">{c.num_imoveis}</TableCell>
+                <TableCell className="text-center">{c.num_clientes}</TableCell>
+                <TableCell className="text-center">{c.num_pdfs}</TableCell>
+                <TableCell className="text-center">
+                  {c.ativo ? (
+                    <Badge variant="secondary">ativo</Badge>
+                  ) : (
+                    <Badge variant="destructive">inativo</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCredOpen({ id: c.id, nome: c.nome })}
+                  >
+                    Credenciais
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <DialogNovoConsultor open={novoOpen} onOpenChange={setNovoOpen} />
+      <DialogCredenciais
+        consultor={credOpen}
+        onClose={() => setCredOpen(null)}
+      />
+    </div>
+  )
+}
+
+function DialogNovoConsultor({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const criar = useCriarConsultorAdmin()
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    nome: '',
+    telefone: '',
+    agencia: '',
+  })
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function submeter(e: React.FormEvent) {
+    e.preventDefault()
+    setErro(null)
+    try {
+      await criar.mutateAsync({
+        email: form.email,
+        password: form.password,
+        nome: form.nome,
+        telefone: form.telefone || null,
+        agencia: form.agencia || null,
+      })
+      setForm({ email: '', password: '', nome: '', telefone: '', agencia: '' })
+      onOpenChange(false)
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail ?? 'Erro ao criar consultor')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Novo consultor</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submeter} className="space-y-3">
+          <div>
+            <Label>Nome</Label>
+            <Input
+              required
+              value={form.nome}
+              onChange={(e) => setForm({ ...form, nome: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Email</Label>
+            <Input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Password (mín. 8)</Label>
+            <Input
+              type="password"
+              required
+              minLength={8}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Telefone</Label>
+              <Input
+                value={form.telefone}
+                onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Agência</Label>
+              <Input
+                value={form.agencia}
+                onChange={(e) => setForm({ ...form, agencia: e.target.value })}
+              />
+            </div>
+          </div>
+          {erro && <p className="text-sm text-destructive">{erro}</p>}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={criar.isPending}>
+              Criar
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DialogCredenciais({
+  consultor,
+  onClose,
+}: {
+  consultor: { id: number; nome: string } | null
+  onClose: () => void
+}) {
+  const alterar = useAlterarCredenciaisConsultor()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function submeter(e: React.FormEvent) {
+    e.preventDefault()
+    if (!consultor) return
+    setErro(null)
+    try {
+      await alterar.mutateAsync({
+        consultorId: consultor.id,
+        payload: {
+          email: email || undefined,
+          new_password: password || undefined,
+        },
+      })
+      setEmail('')
+      setPassword('')
+      onClose()
+    } catch (err: any) {
+      setErro(err?.response?.data?.detail ?? 'Erro ao alterar credenciais')
+    }
+  }
+
+  return (
+    <Dialog open={!!consultor} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Credenciais — {consultor?.nome}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submeter} className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Deixa em branco o que não queres alterar. O consultor terá de
+            voltar a autenticar-se.
+          </p>
+          <div>
+            <Label>Novo email</Label>
+            <Input
+              type="email"
+              placeholder="(manter atual)"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Nova password (mín. 8)</Label>
+            <Input
+              type="password"
+              minLength={8}
+              placeholder="(manter atual)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {erro && <p className="text-sm text-destructive">{erro}</p>}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={alterar.isPending || (!email && !password)}
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

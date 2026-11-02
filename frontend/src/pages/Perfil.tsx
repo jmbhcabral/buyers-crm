@@ -4,6 +4,7 @@ import { useMeuConsultor } from '@/hooks/use-consultor'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import FormConsultor from '@/components/perfil/FormConsultor'
 import ListaApiKeys from '@/components/perfil/ListaApiKeys'
+import FormAlterarPassword from '@/components/perfil/FormAlterarPassword'
 
 export default function Perfil() {
   const { user } = useAuth()
@@ -45,6 +46,11 @@ export default function Perfil() {
         <div>
           <ListaApiKeys />
         </div>
+      </div>
+
+      {/* Secção de credenciais — comum a consultores e admins */}
+      <div className="max-w-md">
+        <FormAlterarPassword />
       </div>
     </div>
   )

@@ -400,3 +400,20 @@ export interface DashboardInteracoesPendentes {
   notas_nao_lidas: number
   recentes: InteracaoComContexto[]
 }
+
+
+export interface ConsultorAdminCreate {
+  email: string
+  password: string
+  nome: string
+  telefone?: string | null
+  nif?: string | null
+  bio?: string | null
+  agencia?: string | null
+  is_admin?: boolean
+}
+
+export interface ConsultorAdminCredenciaisUpdate {
+  email?: string
+  new_password?: string
+}

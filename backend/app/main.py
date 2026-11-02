@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.middleware import PrivateNetworkAccessMiddleware
 
 from app.config import settings
-from app.routers import admin, api_keys, auth, me, clientes, consultores, dashboard, interacoes, links, imoveis, pdfs, public
+from app.routers import admin, admin_consultores, api_keys, auth, me, clientes, consultores, dashboard, interacoes, links, imoveis, pdfs, public
 from app.routers.public import router_consultores
 
 app = FastAPI(
@@ -53,6 +53,7 @@ app.include_router(pdfs.router, prefix="/api")
 app.include_router(imoveis.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_consultores.router, prefix="/api")   
 app.include_router(links.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
 app.include_router(router_consultores, prefix="/api")

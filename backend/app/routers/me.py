@@ -10,6 +10,8 @@ from app.deps import CurrentConsultor, CurrentUser, DbSession
 from app.models import Consultor
 from app.schemas.consultor import ConsultorRead, ConsultorUpdate
 from app.schemas.user import UserRead, UserUpdate
+from app.schemas.admin import PasswordChangeSelf
+from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -117,3 +119,25 @@ def atualizar_meu_user(
     db.commit()
     db.refresh(user)
     return UserRead.model_validate(user)
+
+
+@router.put("/password", status_code=status.HTTP_204_NO_CONTENT)
+def alterar_minha_password(
+    payload: PasswordChangeSelf,
+    db: DbSession,
+    user: CurrentUser,
+) -> None:
+    """Altera a password do utilizador autenticado (exige a atual)."""
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Password atual incorreta",
+        )
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "A nova password deve ser diferente da atual",
+        )
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
