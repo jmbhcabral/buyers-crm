@@ -1,0 +1,235 @@
+.
+├── .env
+├── .env.example
+├── .env.prod.example
+├── .gitignore
+├── CHANGELOG.md
+├── Makefile
+├── PROJECT_CONTEXT.md
+├── PROJECT_CONTEXT_buyers-crm.md
+├── PROJECT_STRUCTURE.txt
+├── README.md
+├── TODO_buyers-crm.md
+├── backend
+│   ├── Dockerfile
+│   ├── alembic
+│   │   ├── env.py
+│   │   ├── script.py.mako
+│   │   └── versions
+│   │       ├── 10151798770d_add_agencia_and_foto_to_consultores.py
+│   │       ├── 17ee420e2e3d_add_idealista_id_and_ativa_to_fotos.py
+│   │       ├── 66a7820b5d89_initial_schema.py
+│   │       ├── 7f72401e61aa_add_referencia_anunciante_to_imoveis_.py
+│   │       ├── b767f3d74aea_add_pdfs_gerados_table.py
+│   │       ├── b7c366f9bb72_add_link_cliente_tables.py
+│   │       ├── c12ad887e21e_add_token_visible_to_links_cliente.py
+│   │       └── f3a1b2c4d5e6_add_estado_imovel_and_interacoes.py
+│   ├── alembic.ini
+│   ├── app
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── deps.py
+│   │   ├── main.py
+│   │   ├── middleware.py
+│   │   ├── models
+│   │   │   ├── __init__.py
+│   │   │   ├── api_key.py
+│   │   │   ├── associacoes.py
+│   │   │   ├── base.py
+│   │   │   ├── cliente.py
+│   │   │   ├── consultor.py
+│   │   │   ├── imovel_canonico.py
+│   │   │   ├── imovel_versao.py
+│   │   │   ├── interacao.py
+│   │   │   ├── link_cliente.py
+│   │   │   ├── pdf_gerado.py
+│   │   │   └── user.py
+│   │   ├── routers
+│   │   │   ├── __init__.py
+│   │   │   ├── admin.py
+│   │   │   ├── admin_consultores.py
+│   │   │   ├── api_keys.py
+│   │   │   ├── auth.py
+│   │   │   ├── clientes.py
+│   │   │   ├── consultores.py
+│   │   │   ├── dashboard.py
+│   │   │   ├── imoveis.py
+│   │   │   ├── interacoes.py
+│   │   │   ├── links.py
+│   │   │   ├── me.py
+│   │   │   ├── pdfs.py
+│   │   │   └── public.py
+│   │   ├── schemas
+│   │   │   ├── __init__.py
+│   │   │   ├── admin.py
+│   │   │   ├── api_key.py
+│   │   │   ├── auth.py
+│   │   │   ├── cliente.py
+│   │   │   ├── consultor.py
+│   │   │   ├── imovel.py
+│   │   │   ├── ingest.py
+│   │   │   ├── interacao.py
+│   │   │   ├── link.py
+│   │   │   ├── pdf.py
+│   │   │   ├── public.py
+│   │   │   └── user.py
+│   │   ├── security.py
+│   │   ├── services
+│   │   │   ├── __init__.py
+│   │   │   ├── consultor_utils.py
+│   │   │   ├── fotos.py
+│   │   │   ├── ingest.py
+│   │   │   ├── pdf.py
+│   │   │   └── pdf_storage.py
+│   │   └── storage
+│   │       └── fotos
+│   ├── pyproject.toml
+│   ├── scripts
+│   │   ├── __init__.py
+│   │   ├── seed.py
+│   │   ├── seed_imovel_teste.sql
+│   │   ├── smoke_models.py
+│   │   ├── smoke_test.py
+│   │   └── test_ingest.sh
+│   └── storage
+│       ├── consultores
+│       │   └── 1_3c83f663.jpg
+│       ├── fotos
+│       └── pdfs
+├── docker-compose.prod.yml
+├── docker-compose.yml
+├── frontend
+│   ├── .gitignore
+│   ├── Dockerfile
+│   ├── README.md
+│   ├── components.json
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── postcss.config.js
+│   ├── public
+│   │   ├── brand.png
+│   │   ├── favicon.svg
+│   │   └── og-image.png
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   ├── hero.png
+│   │   │   ├── react.svg
+│   │   │   └── vite.svg
+│   │   ├── components
+│   │   │   ├── cliente
+│   │   │   ├── dashboard
+│   │   │   ├── imovel
+│   │   │   ├── layout
+│   │   │   ├── perfil
+│   │   │   └── ui
+│   │   ├── hooks
+│   │   │   ├── use-admin-consultores.ts
+│   │   │   ├── use-admin.ts
+│   │   │   ├── use-api-keys.ts
+│   │   │   ├── use-cliente.ts
+│   │   │   ├── use-clientes.ts
+│   │   │   ├── use-consultor.ts
+│   │   │   ├── use-dashboard.ts
+│   │   │   ├── use-foto-blob.ts
+│   │   │   ├── use-imoveis-do-cliente.ts
+│   │   │   ├── use-imoveis.ts
+│   │   │   ├── use-imovel.ts
+│   │   │   ├── use-interacoes-crm.ts
+│   │   │   ├── use-links.ts
+│   │   │   ├── use-me.ts
+│   │   │   ├── use-mutations-imovel.ts
+│   │   │   ├── use-pdfs.ts
+│   │   │   ├── use-theme.ts
+│   │   │   └── use-toast.ts
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   ├── api.ts
+│   │   │   ├── auth-context.ts
+│   │   │   ├── auth.tsx
+│   │   │   ├── toast.ts
+│   │   │   ├── use-auth.ts
+│   │   │   └── utils.ts
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── Admin.tsx
+│   │   │   ├── ClienteDetalhe.tsx
+│   │   │   ├── Clientes.tsx
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── Home.tsx
+│   │   │   ├── Imoveis.tsx
+│   │   │   ├── ImovelDetalhe.tsx
+│   │   │   ├── Links.tsx
+│   │   │   ├── Login.tsx
+│   │   │   ├── Pdfs.tsx
+│   │   │   └── Perfil.tsx
+│   │   └── types
+│   │       └── index.ts
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   ├── tsconfig.node.tsbuildinfo
+│   ├── tsconfig.tsbuildinfo
+│   ├── vite.config.d.ts
+│   ├── vite.config.js
+│   └── vite.config.ts
+├── frontend-public
+│   ├── .gitignore
+│   ├── Dockerfile
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── postcss.config.js
+│   ├── public
+│   │   ├── brand.png
+│   │   ├── favicon.svg
+│   │   └── og-image.png
+│   ├── scripts
+│   │   └── gerar_og_image.py
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   ├── hero.png
+│   │   │   ├── react.svg
+│   │   │   └── vite.svg
+│   │   ├── components
+│   │   │   ├── AcoesImovel.tsx
+│   │   │   ├── CardImovel.tsx
+│   │   │   ├── EstadoImovelBadge.tsx
+│   │   │   ├── Layout.tsx
+│   │   │   ├── Modal.tsx
+│   │   │   ├── ModalNotas.tsx
+│   │   │   └── ModalPedidoVisita.tsx
+│   │   ├── hooks
+│   │   │   └── use-interacoes.ts
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   └── api.ts
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── DetalhePage.tsx
+│   │   │   └── ListaPage.tsx
+│   │   └── types.ts
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── package.json
+├── pnpm-lock.yaml
+├── postcss.config.js
+├── tailwind.config.js
+└── userscript
+    └── buyers-crm.user.js
+
+41 directories, 192 files
