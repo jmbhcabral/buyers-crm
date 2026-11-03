@@ -34,7 +34,11 @@ def _obter_cliente_com_acesso(
     - Consultor: acede se estiver associado ao cliente.
     - Sem consultor (user normal): 404.
     """
-    cliente = db.get(Cliente, cliente_id)
+    cliente = db.get(
+        Cliente,
+        cliente_id,
+        options=[selectinload(Cliente.qualificacao)],
+    )
     if cliente is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
@@ -69,7 +73,7 @@ def listar_clientes(
     offset: int = Query(default=0, ge=0),
 ) -> list[Cliente]:
     """Lista clientes acessíveis ao utilizador autenticado."""
-    stmt = select(Cliente)
+    stmt = select(Cliente).options(selectinload(Cliente.qualificacao))
 
     if not user.is_admin:
         if consultor is None:
@@ -113,6 +117,7 @@ def criar_cliente(
 ) -> Cliente:
     """Cria um cliente.
 
+    - `e_comprador` / `e_vendedor` são validados no schema (pelo menos um true).
     - Consultor: cria e associa-se automaticamente.
     - Admin sem perfil de consultor: cria sem associação.
     """
@@ -142,6 +147,16 @@ def atualizar_cliente(
     cliente = _obter_cliente_com_acesso(db, cliente_id, user, consultor)
 
     data = payload.model_dump(exclude_unset=True)
+
+    # Valida o estado final dos papéis (o PATCH pode ser parcial)
+    novo_e_comprador = data.get("e_comprador", cliente.e_comprador)
+    novo_e_vendedor = data.get("e_vendedor", cliente.e_vendedor)
+    if not (novo_e_comprador or novo_e_vendedor):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "O cliente tem de ser comprador, vendedor, ou ambos.",
+        )
+
     for campo, valor in data.items():
         setattr(cliente, campo, valor)
 

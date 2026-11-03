@@ -5,7 +5,6 @@
 ├── .gitignore
 ├── CHANGELOG.md
 ├── Makefile
-├── PROJECT_CONTEXT.md
 ├── PROJECT_CONTEXT_buyers-crm.md
 ├── PROJECT_STRUCTURE.txt
 ├── README.md
@@ -22,6 +21,7 @@
 │   │       ├── 7f72401e61aa_add_referencia_anunciante_to_imoveis_.py
 │   │       ├── b767f3d74aea_add_pdfs_gerados_table.py
 │   │       ├── b7c366f9bb72_add_link_cliente_tables.py
+│   │       ├── b8c4e2a1f9d3_add_papeis_cliente_qualificacao.py
 │   │       ├── c12ad887e21e_add_token_visible_to_links_cliente.py
 │   │       └── f3a1b2c4d5e6_add_estado_imovel_and_interacoes.py
 │   ├── alembic.ini
@@ -44,6 +44,7 @@
 │   │   │   ├── interacao.py
 │   │   │   ├── link_cliente.py
 │   │   │   ├── pdf_gerado.py
+│   │   │   ├── qualificacao_comprador.py
 │   │   │   └── user.py
 │   │   ├── routers
 │   │   │   ├── __init__.py
@@ -59,7 +60,8 @@
 │   │   │   ├── links.py
 │   │   │   ├── me.py
 │   │   │   ├── pdfs.py
-│   │   │   └── public.py
+│   │   │   ├── public.py
+│   │   │   └── qualificacao_comprador.py
 │   │   ├── schemas
 │   │   │   ├── __init__.py
 │   │   │   ├── admin.py
@@ -73,6 +75,7 @@
 │   │   │   ├── link.py
 │   │   │   ├── pdf.py
 │   │   │   ├── public.py
+│   │   │   ├── qualificacao_comprador.py
 │   │   │   └── user.py
 │   │   ├── security.py
 │   │   ├── services
@@ -84,6 +87,7 @@
 │   │   │   └── pdf_storage.py
 │   │   └── storage
 │   │       └── fotos
+│   │           └── .gitkeep
 │   ├── pyproject.toml
 │   ├── scripts
 │   │   ├── __init__.py
@@ -123,11 +127,56 @@
 │   │   │   └── vite.svg
 │   │   ├── components
 │   │   │   ├── cliente
+│   │   │   │   ├── DialogAnalytics.tsx
+│   │   │   │   ├── DialogNovoCliente.tsx
+│   │   │   │   ├── FormCliente.tsx
+│   │   │   │   ├── GestaoImoveisDoLink.tsx
+│   │   │   │   ├── LinkCliente.tsx
+│   │   │   │   ├── QualificacaoCompradorForm.tsx
+│   │   │   │   ├── SecaoInteracoes.tsx
+│   │   │   │   └── SecaoNotas.tsx
 │   │   │   ├── dashboard
+│   │   │   │   └── StatCard.tsx
 │   │   │   ├── imovel
+│   │   │   │   ├── ClientesAssociados.tsx
+│   │   │   │   ├── EstadoImovelSelect.tsx
+│   │   │   │   ├── FormImovel.tsx
+│   │   │   │   ├── FotoBlob.tsx
+│   │   │   │   ├── GaleriaFotos.tsx
+│   │   │   │   ├── SecaoInteracoesImovel.tsx
+│   │   │   │   ├── SecaoNotasImovel.tsx
+│   │   │   │   └── SnapshotCanonico.tsx
 │   │   │   ├── layout
+│   │   │   │   ├── AppLayout.tsx
+│   │   │   │   ├── Header.tsx
+│   │   │   │   ├── ProtectedRoute.tsx
+│   │   │   │   └── Sidebar.tsx
 │   │   │   ├── perfil
+│   │   │   │   ├── DialogNovaApiKey.tsx
+│   │   │   │   ├── FormAlterarPassword.tsx
+│   │   │   │   ├── FormConsultor.tsx
+│   │   │   │   └── ListaApiKeys.tsx
 │   │   │   └── ui
+│   │   │       ├── alert-dialog.tsx
+│   │   │       ├── avatar.tsx
+│   │   │       ├── badge.tsx
+│   │   │       ├── button.tsx
+│   │   │       ├── card.tsx
+│   │   │       ├── checkbox.tsx
+│   │   │       ├── confirm-dialog.tsx
+│   │   │       ├── dialog.tsx
+│   │   │       ├── dropdown-menu.tsx
+│   │   │       ├── input.tsx
+│   │   │       ├── label.tsx
+│   │   │       ├── select.tsx
+│   │   │       ├── separator.tsx
+│   │   │       ├── sonner.tsx
+│   │   │       ├── switch.tsx
+│   │   │       ├── table.tsx
+│   │   │       ├── tabs.tsx
+│   │   │       ├── textarea.tsx
+│   │   │       ├── toast.tsx
+│   │   │       └── toaster.tsx
 │   │   ├── hooks
 │   │   │   ├── use-admin-consultores.ts
 │   │   │   ├── use-admin.ts
@@ -145,6 +194,7 @@
 │   │   │   ├── use-me.ts
 │   │   │   ├── use-mutations-imovel.ts
 │   │   │   ├── use-pdfs.ts
+│   │   │   ├── use-qualificacao-comprador.ts
 │   │   │   ├── use-theme.ts
 │   │   │   └── use-toast.ts
 │   │   ├── index.css
@@ -225,6 +275,8 @@
 │   ├── tsconfig.json
 │   ├── tsconfig.node.json
 │   └── vite.config.ts
+├── help commands
+│   └── dev_help.md
 ├── package.json
 ├── pnpm-lock.yaml
 ├── postcss.config.js
@@ -232,4 +284,4 @@
 └── userscript
     └── buyers-crm.user.js
 
-41 directories, 192 files
+42 directories, 243 files

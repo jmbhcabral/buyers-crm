@@ -9,6 +9,7 @@ from app.models.imovel_versao import ImovelVersao
 from app.models.interacao import InteracaoImovel, NotaClienteImovel
 from app.models.link_cliente import LinkAcesso, LinkCliente, LinkImovel
 from app.models.pdf_gerado import PdfGerado
+from app.models.qualificacao_comprador import QualificacaoComprador
 from app.models.user import User
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "LinkCliente",
     "LinkImovel",
     "PdfGerado",
+    "QualificacaoComprador",
     "User",
 ]

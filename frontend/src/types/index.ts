@@ -123,8 +123,13 @@ export interface Cliente {
   telefone: string | null
   nif: string | null
   notas: string | null
+  // Papéis: pelo menos um é true (validado no backend)
+  e_comprador: boolean
+  e_vendedor: boolean
   criado_em: string
   atualizado_em: string
+  // Ficha de qualificação (só existe quando e_comprador=true e já preenchida)
+  qualificacao: QualificacaoComprador | null
 }
 
 export interface ClienteAssociado {
@@ -137,6 +142,84 @@ export interface ClienteAssociado {
 export interface ImovelVersaoComDetalhes extends ImovelVersao {
   canonico: ImovelCanonico
 }
+
+// ===========================================================================
+// Ficha de qualificação de comprador
+// ===========================================================================
+
+export type UrgenciaComprador = 'baixa' | 'media' | 'alta'
+
+export type EstadoDesejadoImovel =
+  | 'novo'
+  | 'semi_novo'
+  | 'remodelado'
+  | 'obras'
+  | 'indiferente'
+
+export type EstadoQualificacao =
+  | 'nao_iniciada'
+  | 'em_preenchimento'
+  | 'concluida'
+
+export interface QualificacaoComprador {
+  id: number
+  cliente_id: number
+  consultor_id: number
+  estado: EstadoQualificacao
+
+  // Bloco 1 — Disponibilidade
+  compra_sozinho: boolean | null
+  disp_notas: string | null
+  disp_alternativas: string | null
+
+  // Bloco 2 — Perfil / Motivação
+  motivo_compra: string | null
+  tempo_procura: string | null
+  urgencia: UrgenciaComprador | null
+  quando_resolver: string | null
+  tem_imovel_venda: boolean | null
+  precisa_vender_comprar: boolean | null
+
+  // Bloco 3 — Imóvel pretendido
+  caracteristicas: string | null
+  nao_prescinde: string | null
+  valor_maximo: string | null // Decimal serializado como string
+  zonas_pretendidas: string | null
+  motivo_zonas: string | null
+  quartos: number | null
+  tipologia: string | null
+  estado_desejado: EstadoDesejadoImovel | null
+  preferencia_andar: string | null
+  elevador: boolean | null
+  parqueamento: string | null
+  arrecadacao: boolean | null
+  exteriores: string | null
+  acessos: string | null
+  transportes: string | null
+  comercio_jardins: string | null
+  areas_especificas: string | null
+  notas_extra: string | null
+
+  // Bloco 4 — Financeira
+  compra_pp: boolean | null
+  financiamento_100: boolean | null
+  falou_banco: boolean | null
+  banco: string | null
+  capitais_proprios: boolean | null
+  capitais_proprios_valor: string | null // Decimal como string
+  efetivo: boolean | null
+  fiadores: boolean | null
+  reuniao_loja: boolean | null
+
+  criado_em: string
+  atualizado_em: string
+}
+
+/** Payload do PUT — sem os campos gerados pelo backend. */
+export type QualificacaoCompradorUpsert = Omit<
+  QualificacaoComprador,
+  'id' | 'cliente_id' | 'consultor_id' | 'criado_em' | 'atualizado_em'
+>
 
 // ===========================================================================
 // PDFs

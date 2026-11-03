@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Loader2 } from 'lucide-react'
 import { useCriarCliente } from '@/hooks/use-clientes'
 import { notify } from '@/lib/toast'
@@ -26,6 +27,10 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
   const [telefone, setTelefone] = useState('')
   const [nif, setNif] = useState('')
   const [notas, setNotas] = useState('')
+  const [eComprador, setEComprador] = useState(true)
+  const [eVendedor, setEVendedor] = useState(false)
+
+  const papeisValidos = eComprador || eVendedor
 
   function reset() {
     setNome('')
@@ -33,11 +38,13 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
     setTelefone('')
     setNif('')
     setNotas('')
+    setEComprador(true)
+    setEVendedor(false)
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!nome.trim()) return
+    if (!nome.trim() || !papeisValidos) return
 
     try {
       await criar.mutateAsync({
@@ -46,6 +53,8 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
         telefone: telefone || null,
         nif: nif || null,
         notas: notas || null,
+        e_comprador: eComprador,
+        e_vendedor: eVendedor,
       })
       reset()
       onOpenChange(false)
@@ -107,6 +116,34 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
               disabled={criar.isPending}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Papéis *</Label>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={eComprador}
+                  onCheckedChange={(v) => setEComprador(v === true)}
+                  disabled={criar.isPending}
+                />
+                Comprador
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={eVendedor}
+                  onCheckedChange={(v) => setEVendedor(v === true)}
+                  disabled={criar.isPending}
+                />
+                Vendedor
+              </label>
+            </div>
+            {!papeisValidos && (
+              <p className="text-xs text-destructive">
+                O cliente tem de ser comprador, vendedor, ou ambos.
+              </p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>
             <textarea
@@ -128,7 +165,10 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={criar.isPending || !nome.trim()}>
+            <Button
+              type="submit"
+              disabled={criar.isPending || !nome.trim() || !papeisValidos}
+            >
               {criar.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar
             </Button>

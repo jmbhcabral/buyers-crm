@@ -1,0 +1,2 @@
+## Comando para obter estrutura do projecto:
+tree -a -L 6 -I 'node_modules|dist|build|.git|.venv|venv|__pycache__|.pytest_cache|.mypy_cache|.ruff_cache|.next|coverage|.cache|.turbo|.vite|vendor|*.pyc|*.log|.DS_Store' > PROJECT_STRUCTURE.txt

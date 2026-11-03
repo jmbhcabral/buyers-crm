@@ -1,6 +1,6 @@
 Buyers CRM — Project Context
 
-Última atualização: 2026-11-01
+Última actualização: 2026-11-03
 
 1. Descrição do projecto
 
@@ -14,6 +14,9 @@ Funcionalidades principais:
 * Gestão centralizada dos imóveis.
 * Versões editáveis dos imóveis por consultor.
 * Gestão de clientes e compradores.
+* Papéis do cliente: comprador, vendedor, ou ambos (ver §4).
+* Ficha de qualificação do comprador (guião de 4 blocos), preenchida
+  no CRM depois da reunião (ver §4).
 * Associação de imóveis a clientes.
 * Geração de PDFs personalizados.
 * Criação de páginas públicas com selecções de imóveis.
@@ -102,7 +105,7 @@ PostgreSQL
     v
 Frontend privado
     |
-    +--> Gestão de clientes
+    +--> Gestão de clientes (com papéis e ficha de qualificação)
     |
     +--> Associação de imóveis
     |
@@ -141,6 +144,7 @@ Tabelas documentadas:
 * link_acessos
 * interacoes_imovel
 * notas_cliente_imovel
+* qualificacoes_comprador
 
 O perfil do consultor inclui:
 
@@ -152,6 +156,30 @@ O perfil do consultor inclui:
 Existem funcionalidades para carregar e remover a fotografia do consultor e um endpoint público para a apresentar.
 
 Antes de qualquer alteração ao modelo de dados, devem ser consultados os modelos SQLAlchemy, schemas e migrações Alembic existentes.
+
+Papéis do cliente e qualificação do comprador
+- `Cliente.e_comprador` e `Cliente.e_vendedor` (booleanos NOT NULL,
+  com CHECK `e_comprador OR e_vendedor`). Um cliente pode ser
+  comprador, vendedor, ou ambos — não há dois registos por cliente.
+  Backfill da migração: clientes existentes ficaram
+  `e_comprador=true`.
+- `QualificacaoComprador` — ficha de qualificação do comprador,
+  1:1 com `Cliente` (`cliente_id` UNIQUE, `ON DELETE CASCADE`).
+  Preenchida no CRM **depois da reunião**, em 4 blocos:
+  disponibilidade, perfil/motivação, imóvel pretendido, financeira.
+  Estado `nao_iniciada | em_preenchimento | concluida`.
+  `consultor_id` aponta para `users.id` (não `consultores.id`).
+- A ficha só existe para o lado comprador. `PUT` num cliente sem
+  `e_comprador=true` devolve 409.
+- `tem_imovel_venda` / `precisa_vender_comprar` na ficha são os
+  sinalizadores do lado vendedor. Quando `tem_imovel_venda=true`, o
+  formulário do CRM sugere marcar o cliente como vendedor (PATCH).
+- O lado vendedor completo (associação ao imóvel, ficha de
+  visitante, estatísticas no link público) é fase 2 e está em
+  TODO. A decisão de ter os dois booleanos hoje não bloqueia nada.
+- A secção "IDENTIFICAÇÃO DO IMÓVEL SOLICITADO" do PDF de
+  qualificação não duplica dados: continua coberta por LinkImovel +
+  InteracaoImovel.
 
 Imóvel e versão
 - `ImovelVersao.estado_imovel` — estado comercial por versão
@@ -175,7 +203,9 @@ Links públicos
   Campos relevantes: `token_prefix` (indexável), `token_visible`
   (últimos caracteres mostrados na UI), `url_publica`, `ativo`,
   `expira_em`, `revogado_em`, `ultimo_acesso_em`. Um cliente tem no
-  máximo um link ativo por consultor.
+  máximo um link ativo por consultor. O link não tem "tipo": cliente
+  comprador, vendedor ou ambos usam o mesmo token; o frontend público
+  decide o que renderizar.
 - `LinkImovel` — associação N:N entre Link e ImovelVersao, com
   `ordem` para controlar a apresentação.
 - `LinkAcesso` — registo de acessos ao link (user_agent, referrer,
@@ -255,6 +285,11 @@ Existem também endpoints para:
 * Fotografias.
 * Geração de PDFs.
 * Dashboard (inclui /dashboard/interacoes-pendentes).
+* Ficha de qualificação de comprador (CRM, autenticado):
+  * GET    /clientes/{id}/qualificacao-comprador
+  * PUT    /clientes/{id}/qualificacao-comprador  (upsert; 409 se
+    o cliente não for comprador)
+  * DELETE /clientes/{id}/qualificacao-comprador
 * Administração (todos sob `Depends(get_admin_user)`):
   * GET   /admin/stats
   * GET   /admin/consultores
@@ -313,6 +348,63 @@ dcp down
 dcp restart backend
 
 Não criar scripts alternativos para substituir este alias.
+
+7.1. Ambiente de desenvolvimento
+
+Em desenvolvimento, apenas a base de dados e o backend correm em
+Docker. Os dois frontends correm no host, através do Vite dev server.
+
+Serviços em Docker (dev)
+Ficheiro: ~/projects/buyers-crm/docker-compose.yml
+
+Serviço   | Container            | Função
+db        | buyers_crm_db        | PostgreSQL 16
+backend   | buyers_crm_backend   | API FastAPI (uvicorn --reload)
+
+Portas expostas:
+- backend: ${BACKEND_PORT:-8000}:8000 (por omissão, 8000)
+- db: sem port mapping para o host (só acessível pela rede do compose)
+
+Não há profiles no docker-compose.yml — os dois serviços sobem sempre.
+
+Serviços no host (dev)
+Serviço         | Como arrancar                       | Porta
+frontend        | cd frontend && pnpm dev             | 5173
+frontend-public | cd frontend-public && pnpm dev      | 5174
+
+Os dois frontends declaram `packageManager` em package.json (pnpm).
+Os respetivos vite.config.ts definem `server.host: true` (aceita
+ligações da rede local) e `server.port` (5173 / 5174). Portanto,
+ambos podem estar a correr ao mesmo tempo sem colidir.
+
+Ligação frontend → backend em dev
+- Os dois frontends usam `baseURL: '/api'` (relativo) em
+  src/lib/api.ts.
+- Os respetivos vite.config.ts fazem proxy de `/api` para
+  http://localhost:8000 (changeOrigin: true).
+- Não há .env nos frontends. A base URL do backend nunca aparece no
+  código do cliente; fica sempre atrás do proxy Vite em dev, e atrás
+  do Traefik em prod.
+- O backend em dev aceita CORS de qualquer origem (settings.is_dev),
+  mas o proxy torna o CORS irrelevante em dev.
+
+Comandos úteis (dev)
+docker compose up -d db backend   # arranca backend + db
+docker compose exec -T backend pytest -q
+docker compose logs -f backend
+docker compose exec -T backend alembic upgrade head
+cd frontend && pnpm dev           # Vite em 5173
+cd frontend-public && pnpm dev    # Vite em 5174
+
+Notas
+- O backend executa as migrações Alembic no arranque (ver §8). Em
+  dev, isso significa que um simples `docker compose up -d backend`
+  aplica migrações pendentes.
+- O volume do código do backend está montado no container, por isso
+  edições aos ficheiros em backend/ são apanhadas pelo --reload sem
+  rebuild.
+- Edições ao código dos frontends são apanhadas pelo HMR do Vite,
+  sem rebuild.
 
 8. Docker Compose de produção
 
@@ -413,23 +505,48 @@ Não recriar frontend/src/index.html.
 
 12. Estrutura do repositório
 
-Estrutura principal documentada:
+A estrutura de pastas e ficheiros é mantida em
+PROJECT_STRUCTURE.txt na raiz do repositório. É a **fonte
+canónica**; este documento não a duplica. Antes de qualquer
+alteração estrutural (criar/mover/apagar pastas ou ficheiros),
+consultar esse ficheiro em vez de confiar em memória.
+
+Para regenerar:
+tree -a -L 6 \\
+  -I 'node_modules|dist|build|.git|.venv|venv|__pycache__|.pytest_cache|.mypy_cache|.ruff_cache|.next|coverage|.cache|.turbo|.vite|vendor|*.pyc|*.log|.DS_Store' \\
+  > PROJECT_STRUCTURE.txt
+
+Notas sobre o comando:
+- `-a` inclui ficheiros ocultos (.env, .gitignore, etc.).
+- `-L 6` limita a profundidade a 6 níveis — suficiente para a
+  estrutura actual; se um dia houver paths mais fundos, subir o
+  valor.
+- O `-I` exclui pastas/ficheiros gerados (dependências,
+  caches, builds, logs, bytecode).
+- `tree` é o binário do sistema (`apt install tree` em Ubuntu).
+
+Topo do repositório (resumo):
 
 buyers-crm/
-├── backend/
-├── frontend/
-├── frontend-public/
-├── userscript/
+├── backend/           — API FastAPI + Alembic + scripts
+├── frontend/          — CRM privado (React + Vite)
+├── frontend-public/   — Páginas públicas (React + Vite)
+├── userscript/        — Userscript Tampermonkey
+├── help commands/     — Notas de apoio ao desenvolvimento
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
 ├── Makefile
 ├── package.json
 ├── README.md
-├── PROJECT_CONTEXT.md
-├── TODO.md
+├── PROJECT_CONTEXT_buyers-crm.md
+├── PROJECT_STRUCTURE.txt
+├── TODO_buyers-crm.md
 └── CHANGELOG.md
 
-A estrutura exacta deve ser confirmada no repositório antes de alterações.
+A árvore detalhada (243 ficheiros, 42 diretórios à data de
+2026-11-03) está em PROJECT_STRUCTURE.txt. Actualizar esse
+ficheiro quando a estrutura mudar de forma significativa —
+idealmente na mesma alteração que introduz o novo ficheiro/pasta.
 
 13. Regras de desenvolvimento
 
@@ -457,5 +574,6 @@ A estrutura exacta deve ser confirmada no repositório antes de alterações.
 ⸻
 
 Nota: Este documento descreve a arquitectura e o estado conhecido do
-projecto. As tarefas pendentes estão em TODO.md e as alterações
-realizadas estão em CHANGELOG.md.
+projecto. A estrutura detalhada de ficheiros está em
+PROJECT_STRUCTURE.txt. As tarefas pendentes estão em TODO.md e as
+alterações realizadas estão em CHANGELOG.md.

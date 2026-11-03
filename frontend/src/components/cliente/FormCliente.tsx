@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Save } from 'lucide-react'
 import { useAtualizarCliente } from '@/hooks/use-clientes'
@@ -23,19 +24,30 @@ export default function FormCliente({ cliente }: Props) {
   const [telefone, setTelefone] = useState(cliente.telefone ?? '')
   const [nif, setNif] = useState(cliente.nif ?? '')
   const [notas, setNotas] = useState(cliente.notas ?? '')
+  const [eComprador, setEComprador] = useState(cliente.e_comprador)
+  const [eVendedor, setEVendedor] = useState(cliente.e_vendedor)
+
+  const papeisValidos = eComprador || eVendedor
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    update.mutate({
-      nome,
-      email: email || null,
-      telefone: telefone || null,
-      nif: nif || null,
-      notas: notas || null,
-    }, {
-      onSuccess: () => notify.sucesso('Cliente atualizado.'),
-      onError: () => notify.erro('Erro ao atualizar cliente.'),
-    })
+    if (!papeisValidos) return
+
+    update.mutate(
+      {
+        nome,
+        email: email || null,
+        telefone: telefone || null,
+        nif: nif || null,
+        notas: notas || null,
+        e_comprador: eComprador,
+        e_vendedor: eVendedor,
+      },
+      {
+        onSuccess: () => notify.sucesso('Cliente atualizado.'),
+        onError: () => notify.erro('Erro ao atualizar cliente.'),
+      }
+    )
   }
 
   return (
@@ -81,6 +93,32 @@ export default function FormCliente({ cliente }: Props) {
               onChange={(e) => setNif(e.target.value)}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Papéis</Label>
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={eComprador}
+                  onCheckedChange={(v) => setEComprador(v === true)}
+                />
+                Comprador
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={eVendedor}
+                  onCheckedChange={(v) => setEVendedor(v === true)}
+                />
+                Vendedor
+              </label>
+            </div>
+            {!papeisValidos && (
+              <p className="text-xs text-destructive">
+                O cliente tem de ser comprador, vendedor, ou ambos.
+              </p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>
             <textarea
@@ -92,7 +130,7 @@ export default function FormCliente({ cliente }: Props) {
             />
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={update.isPending}>
+            <Button type="submit" disabled={update.isPending || !papeisValidos}>
               {update.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (

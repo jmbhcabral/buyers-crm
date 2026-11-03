@@ -40,6 +40,10 @@ export function useCriarCliente() {
       telefone?: string | null
       nif?: string | null
       notas?: string | null
+      // Pelo menos um dos papéis tem de ser true (defaults no backend:
+      // e_comprador=true, e_vendedor=false). O backend valida.
+      e_comprador?: boolean
+      e_vendedor?: boolean
     }) => {
       const { data } = await api.post<Cliente>('/clientes', payload)
       return data
@@ -50,10 +54,15 @@ export function useCriarCliente() {
   })
 }
 
+/** Campos escrevíveis de Cliente (exclui gerados pelo backend e relationship). */
+type ClienteUpdatePayload = Partial<
+  Omit<Cliente, 'id' | 'qualificacao' | 'criado_em' | 'atualizado_em'>
+>
+
 export function useAtualizarCliente(clienteId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (payload: Partial<Cliente>) => {
+    mutationFn: async (payload: ClienteUpdatePayload) => {
       const { data } = await api.patch<Cliente>(`/clientes/${clienteId}`, payload)
       return data
     },
