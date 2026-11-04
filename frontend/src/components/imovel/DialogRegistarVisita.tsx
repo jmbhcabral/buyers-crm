@@ -38,13 +38,23 @@ const ORIGEM_OPTIONS: { value: VisitanteOrigem; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ]
 
-const RATING_FIELDS = [
-  { key: 'rating_areas' as const, label: 'Áreas' },
-  { key: 'rating_acabamentos' as const, label: 'Acabamentos' },
-  { key: 'rating_localizacao' as const, label: 'Localização' },
-  { key: 'rating_apresentacao' as const, label: 'Apresentação' },
-  { key: 'rating_preco' as const, label: 'Preço' },
-  { key: 'rating_global' as const, label: 'Global' },
+const SUB_RATING_KEYS = [
+  'rating_areas',
+  'rating_acabamentos',
+  'rating_localizacao',
+  'rating_apresentacao',
+  'rating_preco',
+] as const
+
+type SubRatingKey = (typeof SUB_RATING_KEYS)[number]
+
+const RATING_FIELDS: { key: keyof VisitaImovelCreate; label: string }[] = [
+  { key: 'rating_areas', label: 'Áreas' },
+  { key: 'rating_acabamentos', label: 'Acabamentos' },
+  { key: 'rating_localizacao', label: 'Localização' },
+  { key: 'rating_apresentacao', label: 'Apresentação' },
+  { key: 'rating_preco', label: 'Preço' },
+  { key: 'rating_global', label: 'Apreciação Global' },
 ]
 
 function nowLocalInput(): string {
@@ -54,8 +64,14 @@ function nowLocalInput(): string {
   return local.toISOString().slice(0, 16)
 }
 
+function sugerirGlobal(form: VisitaImovelCreate): number {
+  const soma = SUB_RATING_KEYS.reduce((acc, k) => acc + form[k], 0)
+  const media = Math.round(soma / SUB_RATING_KEYS.length)
+  return Math.max(1, Math.min(5, media))
+}
+
 function emptyForm(): VisitaImovelCreate {
-  return {
+  const base: VisitaImovelCreate = {
     data_visita: nowLocalInput(),
     visitante_nome: '',
     visitante_contacto: null,
@@ -75,6 +91,7 @@ function emptyForm(): VisitaImovelCreate {
     rating_global: 3,
     compraria: false,
   }
+  return { ...base, rating_global: sugerirGlobal(base) }
 }
 
 export default function DialogRegistarVisita({
@@ -93,12 +110,7 @@ export default function DialogRegistarVisita({
             classificações.
           </DialogDescription>
         </DialogHeader>
-        {/* FormInner só existe enquanto o Dialog estiver aberto; ao fechar
-            desmonta e o estado é descartado — sem necessidade de reset manual. */}
-        <FormInner
-          versaoId={versaoId}
-          onClose={() => onOpenChange(false)}
-        />
+        <FormInner versaoId={versaoId} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )
@@ -113,6 +125,7 @@ function FormInner({
 }) {
   const [form, setForm] = useState<VisitaImovelCreate>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [globalManual, setGlobalManual] = useState(false)
   const criar = useCriarVisita(versaoId)
 
   function setField<K extends keyof VisitaImovelCreate>(
@@ -120,6 +133,27 @@ function FormInner({
     v: VisitaImovelCreate[K],
   ) {
     setForm((prev) => ({ ...prev, [k]: v }))
+  }
+
+  function setSubRating(key: SubRatingKey, value: number) {
+    setForm((prev) => {
+      const updated = { ...prev, [key]: value }
+      if (!globalManual) {
+        updated.rating_global = sugerirGlobal(updated)
+      }
+      return updated
+    })
+  }
+
+  /** Actualiza o global manualmente e bloqueia futuras auto-sugestões. */
+  function handleGlobalChange(value: number) {
+    setGlobalManual(true)
+    setForm((prev) => ({ ...prev, rating_global: value }))
+  }
+
+  function resetGlobalToAuto() {
+    setGlobalManual(false)
+    setForm((prev) => ({ ...prev, rating_global: sugerirGlobal(prev) }))
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -312,27 +346,53 @@ function FormInner({
           Classificação (1 = Mau, 5 = Excelente)
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {RATING_FIELDS.map(({ key, label }) => (
-            <div key={key}>
-              <Label htmlFor={key}>{label}</Label>
-              <Select
-                value={String(form[key])}
-                onValueChange={(v) => setField(key, Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ))}
+          {RATING_FIELDS.map(({ key, label }) => {
+            const isGlobal = key === 'rating_global'
+            return (
+              <div key={key}>
+                <Label htmlFor={key}>
+                  {label}
+                  {isGlobal && !globalManual && (
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      (auto)
+                    </span>
+                  )}
+                </Label>
+                <Select
+                  value={String(form[key])}
+                  onValueChange={(v) => {
+                    const num = Number(v)
+                    if (isGlobal) {
+                      handleGlobalChange(num)
+                    } else {
+                      setSubRating(key as SubRatingKey, num)
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )
+          })}
         </div>
+        {globalManual && (
+          <button
+            type="button"
+            onClick={resetGlobalToAuto}
+            className="text-xs text-primary hover:underline"
+          >
+            Voltar a sugerir automaticamente
+          </button>
+        )}
         <div className="flex items-center gap-3 pt-2">
           <Switch
             id="compraria"

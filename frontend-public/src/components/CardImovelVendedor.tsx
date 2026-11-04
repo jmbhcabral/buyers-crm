@@ -181,7 +181,7 @@ export function CardImovelVendedor({ token, imovel, fotoUrl }: Props) {
                         <span>Apresentação: {v.rating_apresentacao}/5</span>
                         <span>Preço: {v.rating_preco}/5</span>
                         <span className="font-medium">
-                          Global: {v.rating_global}/5
+                          Apreciação Global: {v.rating_global}/5
                         </span>
                       </div>
                       {v.gostou && (
