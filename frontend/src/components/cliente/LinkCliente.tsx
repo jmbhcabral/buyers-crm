@@ -1,19 +1,30 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Link2, Copy, RefreshCw, Ban, BarChart3, ExternalLink, Loader2,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Link2, Copy, RefreshCw, Ban, BarChart3, ExternalLink, Loader2, UserCog,
 } from 'lucide-react'
 import {
   useLinkDoCliente,
   useCriarLink,
   useRenovarLink,
   useRevogarLink,
+  useAlterarApresentacaoLink,
 } from '@/hooks/use-links'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { notify } from '@/lib/toast'
 import { DialogAnalytics } from './DialogAnalytics'
+import api from '@/lib/api'
+import type { Cliente, ConsultorComUser } from '@/types'
 
 interface Props {
   clienteId: number
@@ -21,11 +32,21 @@ interface Props {
 
 export default function LinkCliente({ clienteId }: Props) {
   const { data: link, isLoading } = useLinkDoCliente(clienteId)
+  const { data: cliente } = useQuery<Cliente>({
+    queryKey: ['cliente', clienteId],
+    queryFn: async () => (await api.get(`/clientes/${clienteId}`)).data,
+  })
+  const { data: consultores } = useQuery<ConsultorComUser[]>({
+    queryKey: ['consultores'],
+    queryFn: async () => (await api.get('/consultores')).data,
+  })
+
   const criar = useCriarLink()
   const renovar = useRenovarLink()
   const revogar = useRevogarLink()
   const [confirmRevogar, setConfirmRevogar] = useState(false)
   const [analyticsAberto, setAnalyticsAberto] = useState(false)
+  const [alterandoApresentacao, setAlterandoApresentacao] = useState(false)
 
   async function copiar() {
     if (!link?.url_publica) return
@@ -69,6 +90,25 @@ export default function LinkCliente({ clienteId }: Props) {
     })
   }
 
+  const alterar = useAlterarApresentacaoLink()
+
+
+  async function alterarApresentacao(novoId: number | null) {
+    if (!link) return
+    setAlterandoApresentacao(true)
+    try {
+      await alterar.mutateAsync({
+        linkId: link.id,
+        consultorApresentacaoId: novoId,
+      })
+      notify.sucesso('Consultor de apresentação atualizado.')
+    } catch (e: any) {
+      notify.erro(e?.response?.data?.detail ?? 'Erro ao alterar apresentação.')
+    } finally {
+      setAlterandoApresentacao(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <Card>
@@ -78,6 +118,18 @@ export default function LinkCliente({ clienteId }: Props) {
       </Card>
     )
   }
+
+  // Elegíveis para apresentação:
+  //  - cliente de equipa → consultores da mesma equipa
+  //  - cliente pessoal → esconder selector
+  const equipaIdCliente = cliente?.equipa_id ?? null
+  const elegiveis: ConsultorComUser[] =
+    equipaIdCliente !== null
+      ? (consultores ?? []).filter((c) => c.equipa_id === equipaIdCliente)
+      : []
+
+  const apresentacaoEfetiva =
+    link?.consultor_apresentacao_id ?? link?.consultor_id ?? null
 
   return (
     <>
@@ -115,11 +167,48 @@ export default function LinkCliente({ clienteId }: Props) {
                 <span className="text-xs text-muted-foreground">
                   expira em {new Date(link.expira_em).toLocaleDateString('pt-PT')}
                 </span>
+                {equipaIdCliente !== null && (
+                  <Badge variant="outline">equipa</Badge>
+                )}
               </div>
 
               {link.url_publica && (
                 <div className="p-2 bg-muted rounded text-xs font-mono break-all">
                   {link.url_publica}
+                </div>
+              )}
+
+              {/* Consultor de apresentação (só para clientes de equipa) */}
+              {equipaIdCliente !== null && elegiveis.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium flex items-center gap-2">
+                    <UserCog className="h-3.5 w-3.5" />
+                    Consultor de apresentação
+                  </label>
+                  <Select
+                    value={
+                      apresentacaoEfetiva != null
+                        ? String(apresentacaoEfetiva)
+                        : ''
+                    }
+                    onValueChange={(v) => alterarApresentacao(Number(v))}
+                    disabled={alterandoApresentacao}
+                  >
+                    <SelectTrigger className="max-w-xs">
+                      <SelectValue placeholder="Escolher consultor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {elegiveis.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.nome ?? `Consultor #${c.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    É quem aparece na página pública. Alterável por qualquer
+                    membro da equipa.
+                  </p>
                 </div>
               )}
 
@@ -148,7 +237,6 @@ export default function LinkCliente({ clienteId }: Props) {
                   Analytics ({link.num_acessos})
                 </Button>
 
-                {/* Renovar: sempre visível. Label muda conforme o estado. */}
                 <Button
                   size="sm"
                   variant="outline"
@@ -159,7 +247,6 @@ export default function LinkCliente({ clienteId }: Props) {
                   {link.ativo ? 'Renovar' : 'Reativar'}
                 </Button>
 
-                {/* Revogar: só quando está ativo */}
                 {link.ativo && (
                   <Button
                     size="sm"

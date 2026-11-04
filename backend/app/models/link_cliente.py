@@ -28,6 +28,9 @@ class LinkCliente(Base, PKMixin, TimestampMixin):
 
     Cada par (cliente, consultor) tem no máximo UM link.
     O token em claro só é mostrado uma vez, na criação.
+
+    `consultor_apresentacao_id` define quem aparece no público. Default =
+    dono do link (`consultor_id`). Alterável pela equipa do cliente.
     """
 
     __tablename__ = "links_cliente"
@@ -50,6 +53,11 @@ class LinkCliente(Base, PKMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
+    consultor_apresentacao_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("consultores.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     token_hash: Mapped[str] = mapped_column(
         String(128), unique=True, nullable=False, index=True
@@ -64,9 +72,12 @@ class LinkCliente(Base, PKMixin, TimestampMixin):
     revogado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_acesso_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    # Relações
+    # Relações — duas FKs para consultores exigem foreign_keys explícito.
     cliente: Mapped["Cliente"] = relationship()
-    consultor: Mapped["Consultor"] = relationship()
+    consultor: Mapped["Consultor"] = relationship(foreign_keys=[consultor_id])
+    consultor_apresentacao: Mapped["Consultor | None"] = relationship(
+        foreign_keys=[consultor_apresentacao_id],
+    )
     imoveis: Mapped[list["LinkImovel"]] = relationship(
         back_populates="link",
         cascade="all, delete-orphan",

@@ -1,5 +1,179 @@
 Buyers CRM — CHANGELOG
 
+2026-11-04 — Equipas multi-consultor
+
+Backend
+- Nova tabela `equipas` (id, nome UNIQUE, criado_em, atualizado_em).
+  Migração Alembic `g1h2i3j4k5l6` (aditiva).
+- `consultores.equipa_id` (nullable FK → `equipas.id`, ON DELETE SET NULL).
+  Um consultor está em no máximo UMA equipa (coluna única = garantia;
+  sem pivot `equipa_consultores`).
+- `clientes.equipa_id` (nullable FK → `equipas.id`, ON DELETE SET NULL).
+  - `NULL` → cliente **pessoal** (comportamento pré-equipas; dono via
+    `cliente_consultor`).
+  - `NOT NULL` → cliente **partilhado** pela equipa.
+- `imoveis_versoes_clientes.criado_por_consultor_id` (nullable FK →
+  `consultores.id`, ON DELETE SET NULL). Regista quem criou a
+  associação — só ele (ou admin) a pode remover. Backfill: dono da
+  versão na altura da migração; nas linhas antigas (NULL) a regra
+  recai no dono da versão.
+- `links_cliente.consultor_apresentacao_id` (nullable FK →
+  `consultores.id`, ON DELETE SET NULL). Define quem aparece no
+  link público. Default = dono do link; alterável pela equipa.
+  Backfill: `consultor_apresentacao_id = consultor_id`.
+- Novo serviço `app/services/acesso.py`:
+  `pode_gerir_cliente`, `pode_editar_versao`, `pode_ver_versao`,
+  `pode_desassociar_versao_cliente`, `pode_gerir_link`,
+  `resolver_consultor_apresentacao`. Todos os routers passam a usá-lo
+  em vez de comparar `consultor_id` diretamente.
+- Nova matriz de acesso:
+  * **Cliente pessoal** (`equipa_id IS NULL`): dono via
+    `cliente_consultor` (comportamento antigo).
+  * **Cliente de equipa** (`equipa_id NOT NULL`): qualquer membro da
+    equipa gere (clientes, links, visitas, notas, interacções,
+    qualificação, dashboard).
+  * **Versão de imóvel**: continua **estritamente pessoal** — só o
+    dono a edita/apaga. Um membro da equipa pode **ver** versões de
+    colegas quando estão associadas a clientes da equipa
+    (`pode_ver_versao`), mas não editá-las.
+- Regras novas nas associações cliente↔versão:
+  * `POST /api/imoveis/{v}/clientes/{c}` — bloqueio **409** quando o
+    cliente já tem uma versão desse canónico (evita duplicado no link
+    público e ambiguidade de "qual versão representa o imóvel").
+    Mantém-se o 409 do vendedor único.
+  * `DELETE /api/imoveis/{v}/clientes/{c}` — só o consultor que criou
+    a associação (ou admin) remove; legacy recai no dono da versão.
+    Limpa `LinkImovel` de todos os links do cliente para o imóvel
+    sair do público (evita link órfão).
+- Regras novas no link público:
+  * `POST /api/links/{id}/imoveis` — bloqueio **409** por canónico
+    (dois colegas não podem adicionar versões diferentes do mesmo
+    imóvel ao mesmo link).
+  * Novo `PATCH /api/links/{id}/apresentacao` para escolher o
+    consultor de apresentação. Validação: consultor activo; se o
+    cliente é de equipa, tem de ser membro dessa equipa.
+  * `GET /api/links/cliente/{id}` devolve o link da equipa (não do
+    consultor autenticado) quando `cliente.equipa_id NOT NULL`.
+  * `POST /api/links` — unicidade: cliente de equipa tem **um** link
+    (independente do consultor); cliente pessoal mantém
+    `(cliente_id, consultor_id)`.
+- `GET /api/public/links/{token}` e `.../imoveis/{versao_id}`:
+  * Removido o check `versao.consultor_id == link.consultor_id` do
+    `_resolver_imovel_no_link` — a associação
+    (`LinkImovel`/`ImovelVersaoCliente`) é a única fonte de verdade.
+    Isto permite que a equipa cure o link com versões de colegas.
+  * Consultor mostrado no público unificado em
+    `_resolver_apresentacao_id(link)` = `consultor_apresentacao_id` com
+    fallback para `consultor_id`. Antes divergia (lista usava o do
+    link, detalhe usava o da versão).
+  * `imoveis_vendedor`: removido o filtro
+    `ImovelVersao.consultor_id == link.consultor_id` (a validação
+    passa a ser só `ImovelVersaoCliente.papel='vendedor'` +
+    `cliente_id`).
+  * `imoveis-vendedor/{versao_id}/estatisticas`: removido o mesmo
+    check de dono — a validação é só "é angariação activa do cliente
+    do link".
+- CRUD de equipas em `/api/admin/equipas` (todos sob
+  `Depends(get_admin_user)`):
+  * `GET    /admin/equipas`
+  * `POST   /admin/equipas`
+  * `GET    /admin/equipas/{id}`  (devolve membros)
+  * `PATCH  /admin/equipas/{id}`
+  * `DELETE /admin/equipas/{id}`  (SET NULL em consultores e clientes)
+  * `POST   /admin/equipas/{id}/consultores/{cid}` (409 se consultor
+    já pertence a outra equipa)
+  * `DELETE /admin/equipas/{id}/consultores/{cid}`
+- `POST /admin/consultores` mantém-se; a atribuição de equipa faz-se
+  via `/admin/equipas`. `ConsultorRead`/`ConsultorComUser` passam a
+  expor `equipa_id`.
+- `GET /api/clientes`, `POST /api/clientes`, `PATCH /api/clientes/{id}`
+  passam a aceitar `equipa_id` (`null` = pessoal; `id` = equipa).
+  Validação: só a própria equipa (admin pode atribuir a qualquer).
+- `GET /api/imoveis` ganha `?incluir_equipa=true` — inclui versões de
+  colegas que estejam associadas a clientes da equipa do consultor.
+- `GET /api/dashboard/*` passa a agregar clientes/versões da equipa
+  (helpers `_cliente_filter`, `_versao_filter`, `_pdf_filter`).
+- `visitas.py`: `_validar_angariacao` passa a validar acesso ao
+  **cliente vendedor** (não só à versão). Um membro da equipa não
+  cria visitas em versões angariadas a clientes a que não tem acesso.
+
+Frontend privado
+- Novo `hooks/use-equipas.ts` (CRUD admin + `useEquipasDisponiveis`).
+  `useEquipasDisponiveis` lê `consultor.equipa_id` do `AuthContext`
+  (`useAuth`), não faz query a `/me`.
+- `pages/Admin.tsx`: nova tab **Equipas** com:
+  * tabela (nome, nº consultores, nº clientes, data);
+  * diálogo "Nova equipa";
+  * diálogo "Gerir membros" (lista + selector de consultor para
+    adicionar + botão remover).
+- `components/cliente/FormCliente.tsx`: novo selector
+  **Visibilidade** (`Só para mim (pessoal)` vs `Equipa: {nome}`).
+  - Admin vê todas as equipas.
+  - Consultor vê só a sua, com label "Minha Equipa".
+  - Cliente `equipa_id` acompanha o `PATCH /clientes/{id}`.
+- `components/cliente/DialogNovoCliente.tsx`: mesmo selector.
+- `components/cliente/LinkCliente.tsx`: novo bloco
+  **Consultor de apresentação** (só quando `cliente.equipa_id NOT NULL`):
+  - Select com consultores da mesma equipa (via `GET /consultores`
+    filtrado por `equipa_id`);
+  - mutation `useAlterarApresentacaoLink` (sem reload forçado);
+  - Badge "equipa" no header do card.
+- `hooks/use-links.ts`: novo `useAlterarApresentacaoLink`
+  (`PATCH /links/{id}/apresentacao`). `useCriarLink` aceita
+  `consultor_apresentacao_id` opcional.
+- `hooks/use-clientes.ts`: `useCriarCliente` aceita `equipa_id`
+  opcional (`useAtualizarCliente` já o aceitava por derivar de
+  `Cliente`).
+- `hooks/use-me.ts`: mutações passam a usar `refreshUser()` do
+  `AuthContext` em vez de `invalidateQueries(['consultor','me'])`
+  (que não era uma query key real).
+- `types/index.ts`: `Consultor.equipa_id`, `Cliente.equipa_id`,
+  `Link.consultor_apresentacao_id`, novos `Equipa`, `EquipaComMembros`,
+  `ConsultorMembro`, `EquipaCreate`, `EquipaUpdate`, e
+  `ConsultorComUser` (para o `LinkCliente` ter `nome`/`email`).
+
+Frontend público
+- **Nenhuma alteração.** O backend passa a servir o
+  `consultor_apresentacao` em vez do dono do link. O payload
+  mantém-se igual.
+
+Decisões registadas
+- **Versão nasce pessoal**. As versões continuam do consultor que as
+  criou. Só se partilha o **cliente**. Isto evita versões da equipa em
+  paralelo com versões pessoais, e elimina o problema de dedupe de
+  canónicos no link (a associação ao cliente resolve-o antes).
+- **Um consultor em no máximo uma equipa**. Coluna `equipa_id` em vez
+  de pivot. Simples; se um dia for preciso pertença múltipla,
+  promove-se a pivot.
+- **Curadoria do link pela equipa**, **edição da versão só pelo
+  dono**. Coerente com a regra "cliente é da equipa, versão é do
+  consultor".
+- **Desassociar: só quem criou**. Um colega pode adicionar versões
+  ao link do cliente, mas não pode remover a associação
+  cliente↔versão que o outro criou. Admin pode.
+- **Bloqueio de canónico duplicado** (dois pontos: associação
+  cliente↔versão e link). Mensagem 409 explícita com o id da versão
+  existente.
+- **Cliente muda de equipa**: `equipa_id` muda, o link segue o
+  cliente (`pode_gerir_link` deriva de `pode_gerir_cliente`).
+  Membros da equipa antiga perdem acesso; novos ganham.
+- **`notas_internas`** de uma versão são visíveis a membros da equipa
+  que vejam essa versão (via `pode_ver_versao`). Se um dia se quiser
+  esconder ao colega, mascara-se em `_build_detalhe` — decisão adiada
+  por não haver procura.
+- **Admin não pertence a equipa por omissão**, mas pode gerir tudo.
+
+Notas
+- Sem testes automatizados nesta fase (mantém-se a decisão de adiar
+  testes de integração). Migração, modelo, relationships, OpenAPI e
+  fluxo end-to-end (curl + BD) validados manualmente em dev.
+- Race condition conhecida: dois membros da mesma equipa a criar link
+  ao mesmo tempo para o mesmo cliente → dois links. Aceitável para
+  MVP; resolve-se com `SELECT ... FOR UPDATE` no cliente se aparecer.
+- A migração `g1h2i3j4k5l6` correu em dev com backfill correcto:
+  `equipas` vazia, `links_cliente.consultor_apresentacao_id = consultor_id`,
+  `imoveis_versoes_clientes.criado_por_consultor_id` = dono da versão.
+
 2026-11-04 — Portal do vendedor: angariações, fichas de visita e estatísticas
 
 Backend

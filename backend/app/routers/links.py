@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -11,7 +11,6 @@ from app.config import settings
 from app.deps import CurrentUser, DbSession, get_optional_consultor
 from app.models import (
     Cliente,
-    ClienteConsultor,
     Consultor,
     Foto,
     ImovelCanonico,
@@ -26,6 +25,7 @@ from app.schemas.link import (
     LinkAcessoRead,
     LinkAddImovel,
     LinkAnalyticsRead,
+    LinkApresentacaoUpdate,
     LinkComDetalhes,
     LinkCreate,
     LinkCreated,
@@ -33,6 +33,7 @@ from app.schemas.link import (
     LinkRead,
 )
 from app.security import generate_link_token
+from app.services.acesso import pode_gerir_cliente, pode_gerir_link, pode_ver_versao
 
 router = APIRouter(prefix="/links", tags=["links"])
 
@@ -44,9 +45,7 @@ ConsultorOpcional = Annotated[Consultor | None, Depends(get_optional_consultor)]
 # ---------------------------------------------------------------------------
 def _obter_consultor_obrigatorio(consultor: Consultor | None) -> Consultor:
     if consultor is None:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Sem perfil de consultor"
-        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Sem perfil de consultor")
     return consultor
 
 
@@ -59,9 +58,9 @@ def _obter_link_com_acesso(
     link = db.get(LinkCliente, link_id)
     if link is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
-    if not user.is_admin:
-        if consultor is None or link.consultor_id != consultor.id:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
+    cliente = db.get(Cliente, link.cliente_id)
+    if cliente is None or not pode_gerir_link(db, user, consultor, link, cliente):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
     return link
 
 
@@ -86,6 +85,7 @@ def _build_link_read(db: DbSession, link: LinkCliente, cliente_nome: str) -> dic
         "id": link.id,
         "cliente_id": link.cliente_id,
         "consultor_id": link.consultor_id,
+        "consultor_apresentacao_id": link.consultor_apresentacao_id,
         "token_prefix": link.token_prefix,
         "ativo": link.ativo,
         "expira_em": link.expira_em,
@@ -101,6 +101,25 @@ def _build_link_read(db: DbSession, link: LinkCliente, cliente_nome: str) -> dic
     }
 
 
+def _obter_link_existente(
+    db: DbSession, cliente_id: int, consultor_id: int, cliente: Cliente
+) -> LinkCliente | None:
+    """Localiza o link existente para o par cliente/consultor, respeitando
+    a unicidade por cliente quando é de equipa.
+    """
+    if cliente.equipa_id is not None:
+        # Cliente de equipa: um único link, independentemente do consultor.
+        return db.scalar(
+            select(LinkCliente).where(LinkCliente.cliente_id == cliente_id)
+        )
+    return db.scalar(
+        select(LinkCliente).where(
+            LinkCliente.cliente_id == cliente_id,
+            LinkCliente.consultor_id == consultor_id,
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Criar link
 # ---------------------------------------------------------------------------
@@ -113,52 +132,54 @@ def criar_link(
 ) -> LinkCreated:
     """Cria (ou devolve) o link do consultor para um cliente.
 
-    Se já existir um link ativo para este par (cliente, consultor), devolve-o
-    com 200 — mas a resposta é sempre 201. O token em claro só aparece aqui.
+    - Cliente pessoal: um link por (cliente, consultor).
+    - Cliente de equipa: um único link por cliente (independente do consultor).
+    - `consultor_apresentacao_id` default = consultor autenticado; se o
+      cliente for de equipa, tem de ser membro da equipa.
     """
     c = _obter_consultor_obrigatorio(consultor)
 
-    # Verificar acesso ao cliente
     cliente = db.get(Cliente, payload.cliente_id)
     if cliente is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+    if not pode_gerir_cliente(db, user, consultor, cliente):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
-    if not user.is_admin:
-        associado = db.scalar(
-            select(ClienteConsultor).where(
-                ClienteConsultor.cliente_id == payload.cliente_id,
-                ClienteConsultor.consultor_id == c.id,
+    # Validação do consultor de apresentação
+    apresentacao_id = payload.consultor_apresentacao_id
+    if apresentacao_id is not None:
+        apresentacao = db.get(Consultor, apresentacao_id)
+        if apresentacao is None or not apresentacao.ativo:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Consultor de apresentação inválido."
             )
-        )
-        if associado is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+        if cliente.equipa_id is not None and apresentacao.equipa_id != cliente.equipa_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Consultor de apresentação tem de ser membro da equipa do cliente.",
+            )
+    else:
+        apresentacao_id = c.id
 
-    # Já existe?
-    existente = db.scalar(
-        select(LinkCliente).where(
-            LinkCliente.cliente_id == payload.cliente_id,
-            LinkCliente.consultor_id == c.id,
-        )
-    )
+    existente = _obter_link_existente(db, payload.cliente_id, c.id, cliente)
     if existente is not None:
         if not existente.ativo:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Já existe um link revogado para este cliente. Reative-o em vez de criar outro.",
             )
-        # Devolve o mesmo link com o token atual (guardado em claro)
         return LinkCreated(
             **_build_link_read(db, existente, cliente.nome),
             token=existente.token_visible,
         )
 
-    # Criar novo
     token, token_hash, prefix = generate_link_token()
     expira_em = datetime.now(UTC) + timedelta(days=payload.expira_em_dias)
 
     link = LinkCliente(
         cliente_id=payload.cliente_id,
         consultor_id=c.id,
+        consultor_apresentacao_id=apresentacao_id,
         token_hash=token_hash,
         token_visible=token,
         token_prefix=prefix,
@@ -169,14 +190,11 @@ def criar_link(
     db.commit()
     db.refresh(link)
 
-    return LinkCreated(
-        **_build_link_read(db, link, cliente.nome),
-        token=token,
-    )
+    return LinkCreated(**_build_link_read(db, link, cliente.nome), token=token)
 
 
 # ---------------------------------------------------------------------------
-# Listar links do consultor
+# Listar links
 # ---------------------------------------------------------------------------
 @router.get("", response_model=list[LinkRead])
 def listar_links(
@@ -184,19 +202,26 @@ def listar_links(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> list[LinkRead]:
+    """Lista os links acessíveis ao utilizador."""
     stmt = select(LinkCliente).options(selectinload(LinkCliente.cliente))
 
     if not user.is_admin:
         c = _obter_consultor_obrigatorio(consultor)
-        stmt = stmt.where(LinkCliente.consultor_id == c.id)
+        # Link do consultor, ou link de cliente da equipa dele.
+        conds = [LinkCliente.consultor_id == c.id]
+        if c.equipa_id is not None:
+            conds.append(
+                LinkCliente.cliente_id.in_(
+                    select(Cliente.id).where(Cliente.equipa_id == c.equipa_id)
+                )
+            )
+        from sqlalchemy import or_
+
+        stmt = stmt.where(or_(*conds))
 
     stmt = stmt.order_by(LinkCliente.criado_em.desc())
     links = db.scalars(stmt).all()
-
-    return [
-        LinkRead(**_build_link_read(db, l, l.cliente.nome))
-        for l in links
-    ]
+    return [LinkRead(**_build_link_read(db, l, l.cliente.nome)) for l in links]
 
 
 # ---------------------------------------------------------------------------
@@ -209,19 +234,22 @@ def obter_link_por_cliente(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> LinkComDetalhes | None:
-    """Devolve o link do consultor para este cliente (ou None se não existir)."""
+    """Devolve o link do consultor para este cliente (ou None)."""
     c = _obter_consultor_obrigatorio(consultor)
-    link = db.scalar(
-        select(LinkCliente)
-        .options(selectinload(LinkCliente.cliente), selectinload(LinkCliente.imoveis))
-        .where(
-            LinkCliente.cliente_id == cliente_id,
-            LinkCliente.consultor_id == c.id,
-        )
-    )
+    cliente = db.get(Cliente, cliente_id)
+    if cliente is None or not pode_gerir_cliente(db, user, consultor, cliente):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
+    link = _obter_link_existente(db, cliente_id, c.id, cliente)
     if link is None:
         return None
 
+    # Recarrega com relationships
+    link = db.scalar(
+        select(LinkCliente)
+        .options(selectinload(LinkCliente.cliente), selectinload(LinkCliente.imoveis))
+        .where(LinkCliente.id == link.id)
+    )
     return _build_link_detalhes(db, link)
 
 
@@ -231,7 +259,6 @@ def _build_link_detalhes(db: DbSession, link: LinkCliente) -> LinkComDetalhes:
         versao = db.get(ImovelVersao, li.imovel_versao_id)
         if versao is None:
             continue
-        canonico = db.get(ImovelCanonico, versao.imovel_canonico_id)
         num_fotos = db.scalar(
             select(func.count()).select_from(Foto).where(
                 Foto.imovel_canonico_id == versao.imovel_canonico_id,
@@ -247,7 +274,7 @@ def _build_link_detalhes(db: DbSession, link: LinkCliente) -> LinkComDetalhes:
                 localizacao=versao.localizacao,
                 num_fotos=num_fotos,
                 criado_em=li.criado_em,
-                estado_imovel=versao.estado_imovel
+                estado_imovel=versao.estado_imovel,
             )
         )
 
@@ -274,14 +301,14 @@ def obter_link(
     )
     if link is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
-    if not user.is_admin:
-        if consultor is None or link.consultor_id != consultor.id:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
+    cliente = db.get(Cliente, link.cliente_id)
+    if cliente is None or not pode_gerir_link(db, user, consultor, link, cliente):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
     return _build_link_detalhes(db, link)
 
 
 # ---------------------------------------------------------------------------
-# Renovar
+# Renovar / revogar
 # ---------------------------------------------------------------------------
 @router.patch("/{link_id}/renovar", response_model=LinkRead)
 def renovar_link(
@@ -300,9 +327,6 @@ def renovar_link(
     return LinkRead(**_build_link_read(db, link, link.cliente.nome))
 
 
-# ---------------------------------------------------------------------------
-# Revogar
-# ---------------------------------------------------------------------------
 @router.patch("/{link_id}/revogar", response_model=LinkRead)
 def revogar_link(
     link_id: int,
@@ -319,7 +343,46 @@ def revogar_link(
 
 
 # ---------------------------------------------------------------------------
-# Adicionar imóvel
+# Consultor de apresentação
+# ---------------------------------------------------------------------------
+@router.patch("/{link_id}/apresentacao", response_model=LinkRead)
+def alterar_apresentacao(
+    link_id: int,
+    payload: LinkApresentacaoUpdate,
+    db: DbSession,
+    user: CurrentUser,
+    consultor: ConsultorOpcional,
+) -> LinkRead:
+    """Define o consultor mostrado no link público.
+
+    `None` faz fallback para o dono do link.
+    """
+    link = _obter_link_com_acesso(db, link_id, user, consultor)
+    cliente = db.get(Cliente, link.cliente_id)
+    if cliente is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
+
+    novo_id = payload.consultor_apresentacao_id
+    if novo_id is not None:
+        novo = db.get(Consultor, novo_id)
+        if novo is None or not novo.ativo:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Consultor de apresentação inválido."
+            )
+        if cliente.equipa_id is not None and novo.equipa_id != cliente.equipa_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Consultor de apresentação tem de ser membro da equipa do cliente.",
+            )
+
+    link.consultor_apresentacao_id = novo_id
+    db.commit()
+    db.refresh(link)
+    return LinkRead(**_build_link_read(db, link, link.cliente.nome))
+
+
+# ---------------------------------------------------------------------------
+# Adicionar / remover imóvel
 # ---------------------------------------------------------------------------
 @router.post("/{link_id}/imoveis", status_code=status.HTTP_204_NO_CONTENT)
 def adicionar_imovel(
@@ -329,16 +392,18 @@ def adicionar_imovel(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> None:
+    """Adiciona um imóvel ao link.
+
+    - Acesso: `pode_gerir_link` (qualquer membro da equipa do cliente).
+    - O imóvel tem de estar associado ao cliente como **comprador**.
+    - Bloqueia duplicado por canónico (`409`).
+    """
     link = _obter_link_com_acesso(db, link_id, user, consultor)
 
-    # Verificar que o imovel_versao existe e é do consultor do link
     versao = db.get(ImovelVersao, payload.imovel_versao_id)
-    if versao is None or versao.consultor_id != link.consultor_id:
+    if versao is None or not pode_ver_versao(db, user, consultor, versao):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
 
-    # O imóvel tem de estar associado ao cliente do link COMO COMPRADOR.
-    # Imóveis de angariação (papel='vendedor') entram no link pela lista
-    # automática "Meus Imóveis", não pelo LinkImovel curado.
     assoc = db.scalar(
         select(ImovelVersaoCliente).where(
             ImovelVersaoCliente.imovel_versao_id == payload.imovel_versao_id,
@@ -353,7 +418,7 @@ def adicionar_imovel(
             "Associa-o como comprador antes de o incluir no link.",
         )
 
-    # Já está?
+    # Idempotente: já está exatamente esta versão?
     existente = db.scalar(
         select(LinkImovel).where(
             LinkImovel.link_id == link_id,
@@ -361,13 +426,26 @@ def adicionar_imovel(
         )
     )
     if existente is not None:
-        return  # idempotente
+        return
 
-    # Ordem = último + 1
+    # Duplicado por canónico?
+    duplicado = db.scalar(
+        select(LinkImovel.imovel_versao_id)
+        .join(ImovelVersao, ImovelVersao.id == LinkImovel.imovel_versao_id)
+        .where(
+            LinkImovel.link_id == link_id,
+            ImovelVersao.imovel_canonico_id == versao.imovel_canonico_id,
+        )
+    )
+    if duplicado is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Já existe uma versão deste imóvel no link (versão {duplicado}).",
+        )
+
     ultimo = db.scalar(
         select(func.max(LinkImovel.ordem)).where(LinkImovel.link_id == link_id)
     ) or 0
-
     db.add(
         LinkImovel(
             link_id=link_id,
@@ -378,9 +456,6 @@ def adicionar_imovel(
     db.commit()
 
 
-# ---------------------------------------------------------------------------
-# Remover imóvel
-# ---------------------------------------------------------------------------
 @router.delete(
     "/{link_id}/imoveis/{imovel_versao_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -429,7 +504,6 @@ def analytics_link(
     ) or 0
     detalhe = total - lista
 
-    # Por imóvel
     rows = db.execute(
         select(
             LinkAcesso.imovel_versao_id,
@@ -453,7 +527,6 @@ def analytics_link(
         )
     por_imovel.sort(key=lambda x: x.num_acessos, reverse=True)
 
-    # Recentes
     recentes_rows = db.scalars(
         select(LinkAcesso)
         .where(LinkAcesso.link_id == link_id)

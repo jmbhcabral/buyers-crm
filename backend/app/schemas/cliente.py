@@ -14,6 +14,10 @@ class ClienteBase(BaseModel):
     nif: str | None = Field(default=None, max_length=16)
     notas: str | None = None
 
+    # NULL = cliente privado (dono via cliente_consultor).
+    # NOT NULL = cliente partilhado pela equipa.
+    equipa_id: int | None = None
+
     # Papéis: pelo menos um tem de ser verdadeiro.
     e_comprador: bool = True
     e_vendedor: bool = False
@@ -47,6 +51,7 @@ class ClienteUpdate(BaseModel):
     telefone: str | None = Field(default=None, max_length=32)
     nif: str | None = Field(default=None, max_length=16)
     notas: str | None = None
+    equipa_id: int | None = None
     e_comprador: bool | None = None
     e_vendedor: bool | None = None
 

@@ -10,10 +10,22 @@ from pydantic import BaseModel, ConfigDict, Field
 class LinkCreate(BaseModel):
     cliente_id: int
     expira_em_dias: int = Field(default=180, ge=1, le=730)
+    # Se omitido, o backend usa o consultor autenticado (dono do link).
+    consultor_apresentacao_id: int | None = None
 
 
 class LinkAddImovel(BaseModel):
     imovel_versao_id: int
+
+
+class LinkApresentacaoUpdate(BaseModel):
+    """PATCH do consultor de apresentação no link público.
+
+    `consultor_apresentacao_id=None` faz fallback para o dono do link
+    (comportamento pré-equipas).
+    """
+
+    consultor_apresentacao_id: int | None = None
 
 
 # --- Outputs ---
@@ -36,6 +48,7 @@ class LinkRead(BaseModel):
     id: int
     cliente_id: int
     consultor_id: int
+    consultor_apresentacao_id: int | None = None
     token_prefix: str
     ativo: bool
     expira_em: datetime

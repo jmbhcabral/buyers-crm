@@ -4,13 +4,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.deps import CurrentUser, DbSession, get_optional_consultor
 from app.models import (
     Cliente,
     ClienteConsultor,
-    ImovelCanonico,
     ImovelVersao,
     ImovelVersaoCliente,
     PdfGerado,
@@ -24,22 +23,67 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 OptionalConsultor = Annotated[Consultor | None, Depends(get_optional_consultor)]
 
 
+# ---------------------------------------------------------------------------
+# Filtros (SQLAlchemy conditions; None = sem filtro, admin sem consultor)
+# ---------------------------------------------------------------------------
+def _cliente_filter(user: CurrentUser, consultor: Consultor | None):
+    if user.is_admin and consultor is None:
+        return None
+    if consultor is None:
+        return Cliente.id < 0
+    conds = [
+        Cliente.id.in_(
+            select(ClienteConsultor.cliente_id)
+            .where(ClienteConsultor.consultor_id == consultor.id)
+        )
+    ]
+    if consultor.equipa_id is not None:
+        conds.append(Cliente.equipa_id == consultor.equipa_id)
+    return or_(*conds)
+
+
+def _versao_filter(user: CurrentUser, consultor: Consultor | None):
+    if user.is_admin and consultor is None:
+        return None
+    if consultor is None:
+        return ImovelVersao.id < 0
+    conds = [ImovelVersao.consultor_id == consultor.id]
+    if consultor.equipa_id is not None:
+        conds.append(
+            ImovelVersao.id.in_(
+                select(ImovelVersaoCliente.imovel_versao_id)
+                .join(Cliente, Cliente.id == ImovelVersaoCliente.cliente_id)
+                .where(Cliente.equipa_id == consultor.equipa_id)
+            )
+        )
+    return or_(*conds)
+
+
+def _pdf_filter(user: CurrentUser, consultor: Consultor | None):
+    if user.is_admin and consultor is None:
+        return None
+    if consultor is None:
+        return PdfGerado.id < 0
+    conds = [PdfGerado.consultor_id == consultor.id]
+    if consultor.equipa_id is not None:
+        conds.append(
+            PdfGerado.cliente_id.in_(
+                select(Cliente.id).where(Cliente.equipa_id == consultor.equipa_id)
+            )
+        )
+    return or_(*conds)
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
 @router.get("/stats")
 def obter_stats(
     db: DbSession,
     user: CurrentUser,
     consultor: OptionalConsultor,
 ) -> dict:
-    """Estatísticas do consultor autenticado.
-
-    Devolve:
-    - total_imoveis
-    - total_clientes
-    - total_pdfs
-    - imoveis_com_conflitos
-    - imoveis_sem_cliente
-    - pdfs_ultimos_30_dias
-    """
+    """Estatísticas do utilizador (inclui itens da equipa)."""
     if not user.is_admin and consultor is None:
         return {
             "total_imoveis": 0,
@@ -50,86 +94,59 @@ def obter_stats(
             "pdfs_ultimos_30_dias": 0,
         }
 
-    consultor_id = consultor.id if consultor else None
-
-    # Base para filtros (admin vê tudo, consultor vê o seu)
-    if user.is_admin and consultor_id is None:
-        filtro_versao = None
-        filtro_cliente = None
-        filtro_pdf = None
-    else:
-        filtro_versao = ImovelVersao.consultor_id == consultor_id
-        filtro_cliente = ClienteConsultor.consultor_id == consultor_id
-        filtro_pdf = PdfGerado.consultor_id == consultor_id
+    f_versao = _versao_filter(user, consultor)
+    f_cliente = _cliente_filter(user, consultor)
+    f_pdf = _pdf_filter(user, consultor)
 
     # Total imóveis
-    stmt_imoveis = select(func.count()).select_from(ImovelVersao)
-    if filtro_versao is not None:
-        stmt_imoveis = stmt_imoveis.where(filtro_versao)
-    total_imoveis = db.scalar(stmt_imoveis) or 0
+    stmt = select(func.count()).select_from(ImovelVersao)
+    if f_versao is not None:
+        stmt = stmt.where(f_versao)
+    total_imoveis = db.scalar(stmt) or 0
 
-    # Total imóveis com conflitos
-    stmt_conflitos = (
+    # Com conflitos
+    stmt = (
         select(func.count())
         .select_from(ImovelVersao)
         .where(ImovelVersao.tem_conflitos.is_(True))
     )
-    if filtro_versao is not None:
-        stmt_conflitos = stmt_conflitos.where(filtro_versao)
-    imoveis_com_conflitos = db.scalar(stmt_conflitos) or 0
+    if f_versao is not None:
+        stmt = stmt.where(f_versao)
+    imoveis_com_conflitos = db.scalar(stmt) or 0
 
     # Total clientes
-    if user.is_admin and consultor_id is None:
-        total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
-    else:
-        stmt_clientes = (
-            select(func.count(func.distinct(ClienteConsultor.cliente_id)))
-            .select_from(ClienteConsultor)
-            .where(ClienteConsultor.consultor_id == consultor_id)
-        )
-        total_clientes = db.scalar(stmt_clientes) or 0
+    stmt = select(func.count()).select_from(Cliente)
+    if f_cliente is not None:
+        stmt = stmt.where(f_cliente)
+    total_clientes = db.scalar(stmt) or 0
 
     # Total PDFs
-    stmt_pdfs = select(func.count()).select_from(PdfGerado)
-    if filtro_pdf is not None:
-        stmt_pdfs = stmt_pdfs.where(filtro_pdf)
-    total_pdfs = db.scalar(stmt_pdfs) or 0
+    stmt = select(func.count()).select_from(PdfGerado)
+    if f_pdf is not None:
+        stmt = stmt.where(f_pdf)
+    total_pdfs = db.scalar(stmt) or 0
 
     # Imóveis sem cliente associado
-    if user.is_admin and consultor_id is None:
-        from app.models import ImovelVersaoCliente
-
-        subq = select(ImovelVersaoCliente.imovel_versao_id).distinct()
-        stmt_sem = (
-            select(func.count())
-            .select_from(ImovelVersao)
-            .where(~ImovelVersao.id.in_(subq))
-        )
-        imoveis_sem_cliente = db.scalar(stmt_sem) or 0
-    else:
-        from app.models import ImovelVersaoCliente
-
-        subq = select(ImovelVersaoCliente.imovel_versao_id).distinct()
-        stmt_sem = (
-            select(func.count())
-            .select_from(ImovelVersao)
-            .where(ImovelVersao.consultor_id == consultor_id)
-            .where(~ImovelVersao.id.in_(subq))
-        )
-        imoveis_sem_cliente = db.scalar(stmt_sem) or 0
+    subq = select(ImovelVersaoCliente.imovel_versao_id).distinct()
+    stmt = (
+        select(func.count())
+        .select_from(ImovelVersao)
+        .where(~ImovelVersao.id.in_(subq))
+    )
+    if f_versao is not None:
+        stmt = stmt.where(f_versao)
+    imoveis_sem_cliente = db.scalar(stmt) or 0
 
     # PDFs últimos 30 dias
-    from datetime import UTC, datetime, timedelta
-
     trinta_dias_atras = datetime.now(UTC) - timedelta(days=30)
-    stmt_pdfs_30 = (
+    stmt = (
         select(func.count())
         .select_from(PdfGerado)
         .where(PdfGerado.criado_em >= trinta_dias_atras)
     )
-    if filtro_pdf is not None:
-        stmt_pdfs_30 = stmt_pdfs_30.where(filtro_pdf)
-    pdfs_ultimos_30_dias = db.scalar(stmt_pdfs_30) or 0
+    if f_pdf is not None:
+        stmt = stmt.where(f_pdf)
+    pdfs_ultimos_30_dias = db.scalar(stmt) or 0
 
     return {
         "total_imoveis": total_imoveis,
@@ -148,18 +165,16 @@ def obter_imoveis_recentes(
     consultor: OptionalConsultor,
     limit: int = 5,
 ) -> list[dict]:
-    """Últimos imóveis captados (para timeline no dashboard)."""
+    """Últimos imóveis acessíveis (próprios + de clientes da equipa)."""
     from app.models import ImovelCanonico
 
     stmt = (
         select(ImovelVersao, ImovelCanonico)
         .join(ImovelCanonico, ImovelCanonico.id == ImovelVersao.imovel_canonico_id)
     )
-
-    if not user.is_admin:
-        if consultor is None:
-            return []
-        stmt = stmt.where(ImovelVersao.consultor_id == consultor.id)
+    f_versao = _versao_filter(user, consultor)
+    if f_versao is not None:
+        stmt = stmt.where(f_versao)
 
     stmt = stmt.order_by(ImovelVersao.criado_em.desc()).limit(limit)
     rows = db.execute(stmt).all()
@@ -184,20 +199,18 @@ def obter_pdfs_recentes(
     consultor: OptionalConsultor,
     limit: int = 5,
 ) -> list[dict]:
-    """Últimos PDFs gerados."""
-    from app.models import Cliente, ImovelCanonico
+    """Últimos PDFs acessíveis (próprios + de clientes da equipa)."""
+    from app.models import Cliente as _Cliente, ImovelCanonico
 
     stmt = (
-        select(PdfGerado, ImovelVersao, ImovelCanonico, Cliente)
+        select(PdfGerado, ImovelVersao, ImovelCanonico, _Cliente)
         .join(ImovelVersao, ImovelVersao.id == PdfGerado.imovel_versao_id)
         .join(ImovelCanonico, ImovelCanonico.id == ImovelVersao.imovel_canonico_id)
-        .join(Cliente, Cliente.id == PdfGerado.cliente_id)
+        .join(_Cliente, _Cliente.id == PdfGerado.cliente_id)
     )
-
-    if not user.is_admin:
-        if consultor is None:
-            return []
-        stmt = stmt.where(PdfGerado.consultor_id == consultor.id)
+    f_pdf = _pdf_filter(user, consultor)
+    if f_pdf is not None:
+        stmt = stmt.where(f_pdf)
 
     stmt = stmt.order_by(PdfGerado.criado_em.desc()).limit(limit)
     rows = db.execute(stmt).all()
@@ -230,16 +243,16 @@ def obter_interacoes_pendentes(
             "recentes": [],
         }
 
-    if user.is_admin and consultor is None:
-        versao_sub = select(ImovelVersao.id)
-        cliente_sub = select(Cliente.id)
-    else:
-        versao_sub = select(ImovelVersao.id).where(
-            ImovelVersao.consultor_id == consultor.id
-        )
-        cliente_sub = select(ClienteConsultor.cliente_id).where(
-            ClienteConsultor.consultor_id == consultor.id
-        )
+    f_versao = _versao_filter(user, consultor)
+    f_cliente = _cliente_filter(user, consultor)
+
+    # Subqueries para uso em IN(...)
+    versao_sub = select(ImovelVersao.id)
+    if f_versao is not None:
+        versao_sub = versao_sub.where(f_versao)
+    cliente_sub = select(Cliente.id)
+    if f_cliente is not None:
+        cliente_sub = cliente_sub.where(f_cliente)
 
     interesses = db.scalar(
         select(func.count()).select_from(InteracaoImovel).where(

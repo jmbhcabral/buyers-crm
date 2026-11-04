@@ -26,7 +26,8 @@
 │   │       ├── d4e5f6a7b8c9_add_papel_to_imoveis_versoes_clientes.py
 │   │       ├── e6f7a8b9c0d1_add_unique_vendedor_per_versao.py
 │   │       ├── f3a1b2c4d5e6_add_estado_imovel_and_interacoes.py
-│   │       └── f7a8b9c0d1e2_create_visitas_imovel.py
+│   │       ├── f7a8b9c0d1e2_create_visitas_imovel.py
+│   │       └── g1h2i3j4k5l6_create_equipas.py
 │   ├── alembic.ini
 │   ├── app
 │   │   ├── __init__.py
@@ -42,6 +43,7 @@
 │   │   │   ├── base.py
 │   │   │   ├── cliente.py
 │   │   │   ├── consultor.py
+│   │   │   ├── equipa.py
 │   │   │   ├── imovel_canonico.py
 │   │   │   ├── imovel_versao.py
 │   │   │   ├── interacao.py
@@ -59,6 +61,7 @@
 │   │   │   ├── clientes.py
 │   │   │   ├── consultores.py
 │   │   │   ├── dashboard.py
+│   │   │   ├── equipas.py
 │   │   │   ├── imoveis.py
 │   │   │   ├── interacoes.py
 │   │   │   ├── links.py
@@ -74,6 +77,7 @@
 │   │   │   ├── auth.py
 │   │   │   ├── cliente.py
 │   │   │   ├── consultor.py
+│   │   │   ├── equipa.py
 │   │   │   ├── imovel.py
 │   │   │   ├── ingest.py
 │   │   │   ├── interacao.py
@@ -86,6 +90,7 @@
 │   │   ├── security.py
 │   │   ├── services
 │   │   │   ├── __init__.py
+│   │   │   ├── acesso.py
 │   │   │   ├── consultor_utils.py
 │   │   │   ├── fotos.py
 │   │   │   ├── ingest.py
@@ -193,6 +198,7 @@
 │   │   │   ├── use-clientes.ts
 │   │   │   ├── use-consultor.ts
 │   │   │   ├── use-dashboard.ts
+│   │   │   ├── use-equipas.ts
 │   │   │   ├── use-foto-blob.ts
 │   │   │   ├── use-imoveis-do-cliente.ts
 │   │   │   ├── use-imoveis.ts
@@ -295,4 +301,4 @@
 └── userscript
     └── buyers-crm.user.js
 
-42 directories, 254 files
+42 directories, 260 files

@@ -1,6 +1,7 @@
 export interface Consultor {
   id: number
   user_id: number
+  equipa_id: number | null
   telefone: string | null
   nif: string | null
   bio: string | null
@@ -30,6 +31,43 @@ export interface TokenResponse {
 export interface LoginRequest {
   email: string
   password: string
+}
+
+// ===========================================================================
+// Equipas
+// ===========================================================================
+export interface Equipa {
+  id: number
+  nome: string
+  criado_em: string
+  atualizado_em: string
+  num_consultores: number
+  num_clientes: number
+}
+
+export interface ConsultorMembro {
+  id: number
+  user_id: number
+  equipa_id: number | null
+}
+
+export interface EquipaComMembros extends Equipa {
+  consultores: ConsultorMembro[]
+}
+
+export interface EquipaCreate {
+  nome: string
+}
+
+export interface EquipaUpdate {
+  nome?: string
+}
+
+// Consultor + dados do User, tal como `/consultores` devolve.
+// Complementa o tipo `Consultor` (que espelha o schema da BD sem `nome`/`email`).
+export interface ConsultorComUser extends Consultor {
+  nome: string
+  email: string
 }
 
 // ===========================================================================
@@ -123,6 +161,7 @@ export interface Cliente {
   telefone: string | null
   nif: string | null
   notas: string | null
+  equipa_id: number | null
   e_comprador: boolean
   e_vendedor: boolean
   criado_em: string
@@ -357,7 +396,6 @@ export interface AdminPdf {
   criado_em: string
 }
 
-
 // ===========================================================================
 // Links de cliente
 // ===========================================================================
@@ -365,6 +403,7 @@ export interface Link {
   id: number
   cliente_id: number
   consultor_id: number
+  consultor_apresentacao_id: number | null
   token_prefix: string
   token_visible: string | null
   url_publica: string | null
@@ -480,7 +519,6 @@ export interface DashboardInteracoesPendentes {
   recentes: InteracaoComContexto[]
 }
 
-
 export interface ConsultorAdminCreate {
   email: string
   password: string
@@ -496,7 +534,6 @@ export interface ConsultorAdminCredenciaisUpdate {
   email?: string
   new_password?: string
 }
-
 
 // ===========================================================================
 // Visitas a imóveis (fichas de visita — CRM)

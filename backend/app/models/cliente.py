@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, String, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -10,6 +10,7 @@ from app.models.base import PKMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.consultor import Consultor
+    from app.models.equipa import Equipa
     from app.models.imovel_versao import ImovelVersao
     from app.models.qualificacao_comprador import QualificacaoComprador
 
@@ -23,6 +24,15 @@ class Cliente(Base, PKMixin, TimestampMixin):
     nif: Mapped[str | None] = mapped_column(String(16))
     notas: Mapped[str | None] = mapped_column(Text)
 
+    # NULL = cliente privado (dono via `cliente_consultor`).
+    # NOT NULL = cliente partilhado pela equipa.
+    equipa_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("equipas.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Papéis: um cliente pode ser comprador, vendedor, ou ambos.
     # Backfill inicial: todos os clientes existentes são compradores.
     e_comprador: Mapped[bool] = mapped_column(
@@ -33,6 +43,7 @@ class Cliente(Base, PKMixin, TimestampMixin):
     )
 
     # Relações
+    equipa: Mapped["Equipa | None"] = relationship(back_populates="clientes")
     consultores: Mapped[list["Consultor"]] = relationship(
         secondary="cliente_consultor",
         back_populates="clientes",
@@ -55,4 +66,7 @@ class Cliente(Base, PKMixin, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Cliente id={self.id} nome={self.nome!r}>"
+        return (
+            f"<Cliente id={self.id} nome={self.nome!r} "
+            f"equipa_id={self.equipa_id}>"
+        )

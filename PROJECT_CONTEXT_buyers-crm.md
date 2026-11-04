@@ -22,6 +22,11 @@ Funcionalidades principais:
 * Portal do vendedor: o cliente vendedor vê no link público as
   estatísticas do imóvel que está a vender (visitas, feedback,
   avaliações), sem ver dados pessoais dos visitantes.
+* Equipas multi-consultor: um cliente pode ser pessoal (de um
+  consultor) ou partilhado pela equipa; a equipa cura o link público
+  do cliente, escolhe o consultor de apresentação, e vê as visitas,
+  notas e interacções nos detalhes do cliente. As versões de imóvel
+  continuam pessoais (ver §4).
 * Geração de PDFs personalizados.
 * Criação de páginas públicas com selecções de imóveis.
 * Partilha de páginas através de links acessíveis por telemóvel.
@@ -30,7 +35,10 @@ Funcionalidades principais:
 * Estado comercial por versão de imóvel (disponível, reservado, CPCV,
   escritura marcada, vendido, saiu de mercado).
 
-Cada consultor deve poder gerir os seus próprios clientes, imóveis, versões editadas e documentos.
+Cada consultor deve poder gerir os seus próprios clientes, imóveis,
+versões editadas e documentos. Com equipas, os clientes partilhados
+passam a ser geridos por todos os membros da equipa; as versões de
+imóvel continuam pessoais.
 
 2. Stack tecnológica
 
@@ -136,6 +144,7 @@ Tabelas documentadas:
 
 * users
 * consultores
+* equipas
 * api_keys
 * clientes
 * cliente_consultor
@@ -159,10 +168,75 @@ O perfil do consultor inclui:
 * Consultor.foto_caminho
 * foto_url
 * Nome do consultor no schema ConsultorRead.
+* Consultor.equipa_id (nullable) — equipa a que pertence, ou NULL.
 
 Existem funcionalidades para carregar e remover a fotografia do consultor e um endpoint público para a apresentar.
 
 Antes de qualquer alteração ao modelo de dados, devem ser consultados os modelos SQLAlchemy, schemas e migrações Alembic existentes.
+
+Equipas multi-consultor
+- `Equipa` — tabela `equipas` (id, nome UNIQUE, criado_em,
+  atualizado_em). Sem pivot `equipa_consultores`: cada consultor tem
+  uma coluna `equipa_id` e está em no máximo UMA equipa.
+- `Consultor.equipa_id` (nullable FK → `equipas.id`, ON DELETE
+  SET NULL). Um consultor não-admin pertence a 0 ou 1 equipa. Admin
+  gere tudo independentemente.
+- `Cliente.equipa_id` (nullable FK → `equipas.id`, ON DELETE
+  SET NULL).
+  - `NULL` → cliente **pessoal** (dono via `cliente_consultor`;
+    comportamento pré-equipas).
+  - `NOT NULL` → cliente **partilhado** pela equipa — todos os
+    membros com `consultor.equipa_id == cliente.equipa_id` têm
+    acesso.
+- `ImovelVersaoCliente.criado_por_consultor_id` (nullable FK →
+  `consultores.id`, ON DELETE SET NULL). Regista quem criou a
+  associação cliente↔versão. Só ele (ou admin) a pode remover.
+  Legacy (`NULL`) → regra recai no dono da versão.
+- `LinkCliente.consultor_apresentacao_id` (nullable FK →
+  `consultores.id`, ON DELETE SET NULL). Define quem aparece no
+  link público. Default = dono do link (`consultor_id`); alterável
+  pela equipa via `PATCH /links/{id}/apresentacao`. Validação:
+  consultor activo; se o cliente é de equipa, tem de ser membro
+  dessa equipa.
+
+Matriz de acesso (centralizada em `app/services/acesso.py`):
+
+| Operação | Regra |
+|---|---|
+| Gerir cliente | admin OR (pessoal E via `cliente_consultor`) OR (equipa E `consultor.equipa_id == cliente.equipa_id`) |
+| Ver versão | admin OR dono OR (versão associada a cliente da minha equipa) |
+| Editar/apagar versão | admin OR dono |
+| Associar versão↔cliente | `pode_ver_versao` E `pode_gerir_cliente` |
+| Desassociar versão↔cliente | admin OR `criado_por_consultor_id == consultor.id` OR (legacy: dono da versão) |
+| Gerir link | `pode_gerir_cliente` |
+| Adicionar/remover imóvel do link | `pode_gerir_link` |
+| Alterar `consultor_apresentacao_id` | `pode_gerir_link` (validado: activo; mesma equipa do cliente) |
+| Criar visita | `pode_ver_versao` E `pode_gerir_cliente(vendedor)` |
+| Ver/editar/apagar visita | `pode_ver_versao` |
+
+Regras de negócio:
+
+- **Versão nasce pessoal.** As versões continuam do consultor que
+  as criou. Colegas da equipa podem **ver** versões associadas a
+  clientes da equipa, mas não editá-las.
+- **Curadoria do link pela equipa.** Qualquer membro pode
+  adicionar/remover imóveis do link do cliente da equipa.
+- **Bloqueio de canónico duplicado**:
+  * Por cliente — o mesmo cliente só pode ter UMA versão de cada
+    canónico. `POST /imoveis/{v}/clientes/{c}` devolve 409 com o
+    id da versão existente.
+  * Por link — o mesmo link só pode ter UMA versão de cada
+    canónico. `POST /links/{id}/imoveis` devolve 409.
+- **Cleanup no link ao desassociar.** `DELETE /imoveis/{v}/clientes/{c}`
+  remove `LinkImovel` de todos os links do cliente que apontem
+  para essa versão (evita link órfão).
+- **Consultor de apresentação uniformizado no público.** Lista e
+  detalhe usam o mesmo (`_resolver_apresentacao_id(link)`); antes
+  divergia (lista usava o do link, detalhe o da versão).
+- **Cliente muda de equipa.** `equipa_id` muda; o link segue o
+  cliente (membros da equipa antiga perdem acesso; novos ganham).
+  `consultor_apresentacao_id` mantém-se — se apontar para consultor
+  da equipa antiga, tem de ser alterado explicitamente.
 
 Papéis do cliente e qualificação do comprador
 - `Cliente.e_comprador` e `Cliente.e_vendedor` (booleanos NOT NULL,
@@ -191,6 +265,10 @@ Associação cliente ↔ versão de imóvel
   CHECK `papel IN ('comprador','vendedor')` e default `comprador`.
   Um mesmo par cliente↔versão só tem um papel (a PK composta impede
   mais).
+- `criado_por_consultor_id` (FK → `consultores.id`, ON DELETE SET
+  NULL) regista quem criou a associação. Só ele (ou admin) a pode
+  remover; nas linhas anteriores à migração `g1h2i3j4k5l6` o campo
+  é `NULL` e a regra recai no dono da versão.
 - **`papel='comprador'`** — o imóvel é uma sugestão ao cliente.
   Autoriza o `LinkImovel` (o imóvel entra no link público curado).
 - **`papel='vendedor'`** — o imóvel é uma angariação do cliente.
@@ -207,6 +285,11 @@ Associação cliente ↔ versão de imóvel
 - **Regra Q2** — imóveis que o cliente está a vender são excluídos
   da lista comprador do link público, para não aparecerem nas duas
   tabs.
+- **Bloqueio de canónico duplicado** — o mesmo cliente não pode ter
+  duas versões do mesmo canónico. `POST /imoveis/{v}/clientes/{c}`
+  devolve 409 com o id da versão existente. Resolve o problema de
+  duplicação no link público quando há mais do que um consultor a
+  gerir o cliente.
 
 Fichas de visita (lado vendedor)
 - `VisitaImovel` — ficha de visita preenchida pelo consultor no CRM
@@ -227,7 +310,8 @@ Fichas de visita (lado vendedor)
   endpoint público — o nome da agência visitante é dado comercial
   interno. Só a categoria `agencia_externa` é visível.
 - Ficha só pode ser criada se a versão tiver uma angariação activa
-  (`papel='vendedor'`). Caso contrário, 400.
+  (`papel='vendedor'`) **e** o utilizador tiver acesso ao cliente
+  vendedor (`pode_gerir_cliente`). Caso contrário, 400/404.
 
 Imóvel e versão
 - `ImovelVersao.estado_imovel` — estado comercial por versão
@@ -247,20 +331,35 @@ Interações e notas
   apenas para preservar registos criados antes dessa data; esses
   registos são apresentados no frontend como legacy (read-only).
   Marcação de leitura por destinatário.
+- Acesso à thread (CRM): `pode_gerir_cliente` do cliente a que a
+  nota está associada. Um membro da equipa vê as notas do cliente
+  da equipa; versões de colegas não alargam o acesso para além
+  disso.
 
 Links públicos
 - `LinkCliente` — token público associado a um cliente e a um
   consultor. Campos relevantes: `token_prefix` (indexável),
   `token_visible` (últimos caracteres mostrados na UI),
   `url_publica`, `ativo`, `expira_em`, `revogado_em`,
-  `ultimo_acesso_em`. Um cliente tem no máximo um link activo por
-  consultor. O link não tem "tipo": cliente comprador, vendedor ou
-  ambos usam o mesmo token; o frontend público decide o que
-  renderizar com base em `e_comprador` / `e_vendedor` devolvidos
-  pelo backend.
+  `ultimo_acesso_em`, `consultor_apresentacao_id`. O link não tem
+  "tipo": cliente comprador, vendedor ou ambos usam o mesmo token;
+  o frontend público decide o que renderizar com base em
+  `e_comprador` / `e_vendedor` devolvidos pelo backend.
+- `consultor_apresentacao_id` — quem aparece no link público.
+  Default = dono do link (`consultor_id`). Alterável pela equipa via
+  `PATCH /links/{id}/apresentacao`; tem de ser consultor activo e,
+  se o cliente é de equipa, membro dessa equipa. Se `NULL` ou
+  apontar para consultor apagado, cai para `consultor_id`.
+- Unicidade do link:
+  - Cliente **pessoal** (`cliente.equipa_id IS NULL`): um link por
+    par `(cliente_id, consultor_id)` — unique constraint existente.
+  - Cliente **de equipa** (`cliente.equipa_id NOT NULL`): **um** link
+    por cliente (independente do consultor que o criou), validado
+    no router. Membros da equipa partilham o link.
 - `LinkImovel` — associação N:N entre Link e ImovelVersao, com
   `ordem`. Só aceita imóveis associados ao cliente como
-  **comprador**.
+  **comprador**. Bloqueia duplicado de canónico: o mesmo link não
+  pode ter duas versões do mesmo imóvel (409).
 - `LinkAcesso` — registo de acessos ao link (user_agent, referrer,
   imovel_versao_id opcional) para analytics simples. **Não** é
   usado nas estatísticas do vendedor (só `VisitaImovel`).
@@ -268,8 +367,11 @@ Links públicos
 5. Geração de links públicos com token
 
 O link público é criado no CRM (por cliente) e partilhado pelo
-consultor. Cada cliente tem, no máximo, um link ativo por consultor,
-gerido através do painel LinkCliente no detalhe do cliente.
+consultor. Com equipas, o link de um cliente de equipa é **um só**
+(independente do consultor que o criou) e pode ser gerido por
+qualquer membro da equipa. Cliente pessoal mantém a regra antiga
+(um por par cliente↔consultor), gerido através do painel
+`LinkCliente` no detalhe do cliente.
 
 Mecânica
 - O backend gera o token no momento da criação do link. O token é
@@ -288,10 +390,27 @@ Mecânica
 - O consultor pode revogar o link (`revogado_em`) ou deixá-lo
   expirar; um novo link pode ser gerado substituindo o anterior.
 
+Consultor de apresentação
+- `LinkCliente.consultor_apresentacao_id` define quem aparece na
+  página pública (nome, agência, foto, contactos). Default = dono
+  do link (`consultor_id`); alterável por qualquer membro da equipa
+  do cliente via `PATCH /links/{id}/apresentacao`.
+- Validação: consultor activo; se o cliente é de equipa, tem de ser
+  membro dessa equipa.
+- Fallback: se `consultor_apresentacao_id IS NULL` (ou aponta para
+  consultor apagado), usa-se `consultor_id`.
+- O backend unifica a escolha em `_resolver_apresentacao_id(link)`,
+  usada tanto na lista (`GET /public/links/{token}`) como no detalhe
+  (`GET /public/links/{token}/imoveis/{versao}`). Antes divergia: a
+  lista mostrava o dono do link, o detalhe mostrava o dono da
+  versão.
+
 Universo de imóveis no link público
 - **Comprador** (`imoveis` na resposta): imóveis do `LinkImovel`
-  curados pelo consultor. Filtra pela regra Q2 — exclui canónicos que
-  o cliente está a vender.
+  curados pela equipa. Filtra pela regra Q2 — exclui canónicos que
+  o cliente está a vender. A curadoria é feita por qualquer membro
+  da equipa (via `pode_gerir_link`); o bloqueio de canónico
+  duplicado evita duplicados no link.
 - **Vendedor** (`imoveis_vendedor` na resposta): imóveis cujo
   `ImovelVersaoCliente.papel='vendedor'` e
   `ImovelVersaoCliente.cliente_id = link.cliente_id`. Automático,
@@ -301,15 +420,23 @@ Universo de imóveis no link público
   payload do detalhe traz `e_angariacao: bool` — o frontend público
   esconde as `AcoesImovel` (Interesse / Visita / Notas) quando é
   angariação.
+- **`_resolver_imovel_no_link`** não valida
+  `versao.consultor_id == link.consultor_id` — a associação
+  (`LinkImovel` ou `ImovelVersaoCliente`) é a única fonte de verdade.
+  Isto é o que permite a um colega adicionar ao link a versão de
+  outro.
 
 Endpoints (todos com prefixo `/api`)
 - CRM:
   * POST   /links                                  — cria link
   * GET    /clientes/{id}/link                     — link ativo
   * POST   /links/{id}/imoveis                     — adiciona imóvel
-    (tem de estar associado como **comprador**)
+    (tem de estar associado como **comprador**; 409 se já há versão
+    desse canónico no link)
   * DELETE /links/{id}/imoveis/{versao}            — remove imóvel
   * POST   /links/{id}/revogar                     — revoga link
+  * PATCH  /links/{id}/apresentacao                — define o
+    consultor de apresentação
   * GET    /links/{id}/analytics                   — acessos
 - Público — comprador:
   * GET    /public/links/{token}
@@ -353,12 +480,19 @@ GET    /api/public/consultores/{id}/foto
 
 Existem também endpoints para:
 * API Keys.
-* Clientes.
-* Imóveis.
+* Clientes:
+  * GET    /clientes            — próprios + da equipa
+  * POST   /clientes            — aceita `equipa_id` opcional (null =
+    pessoal; id = cliente de equipa; validado: só a própria equipa)
+  * PATCH  /clientes/{id}       — aceita `equipa_id` (idem)
+* Imóveis:
+  * GET    /imoveis?incluir_equipa=true — inclui versões de colegas
+    associadas a clientes da equipa
 * Ingestão de imóveis.
 * Fotografias.
 * Geração de PDFs.
-* Dashboard (inclui /dashboard/interacoes-pendentes).
+* Dashboard (inclui /dashboard/interacoes-pendentes; agrega
+  clientes/versões/PDFs da equipa).
 * Ficha de qualificação de comprador (CRM, autenticado):
   * GET    /clientes/{id}/qualificacao-comprador
   * PUT    /clientes/{id}/qualificacao-comprador  (upsert; 409 se
@@ -366,16 +500,28 @@ Existem também endpoints para:
   * DELETE /clientes/{id}/qualificacao-comprador
 * Associação cliente↔imóvel (CRM, autenticado):
   * POST   /imoveis/{versao_id}/clientes/{cliente_id}?papel=...
-    (default `comprador`; 409 em conflito de papel ou em vendedor
-    duplicado)
+    (default `comprador`; 409 em conflito de papel, vendedor
+    duplicado ou canónico duplicado para o mesmo cliente)
   * DELETE /imoveis/{versao_id}/clientes/{cliente_id}
+    (só o criador da associação, ou admin; legacy = dono da versão;
+    limpa `LinkImovel` do cliente)
   * GET    /imoveis/{versao_id}/clientes  (devolve `papel` por
     cliente)
 * Fichas de visita (CRM, autenticado):
-  * POST   /imoveis/{versao_id}/visitas  (400 sem angariação)
+  * POST   /imoveis/{versao_id}/visitas  (400 sem angariação; 404
+    sem acesso ao cliente vendedor)
   * GET    /imoveis/{versao_id}/visitas
   * PATCH  /visitas/{visita_id}
   * DELETE /visitas/{visita_id}
+* Equipas (admin, sob `Depends(get_admin_user)`):
+  * GET    /admin/equipas
+  * POST   /admin/equipas
+  * GET    /admin/equipas/{id}  (devolve membros)
+  * PATCH  /admin/equipas/{id}
+  * DELETE /admin/equipas/{id}  (SET NULL em consultores e clientes)
+  * POST   /admin/equipas/{id}/consultores/{cid}  (409 se consultor
+    já pertence a outra equipa)
+  * DELETE /admin/equipas/{id}/consultores/{cid}
 * Administração (todos sob `Depends(get_admin_user)`):
   * GET   /admin/stats
   * GET   /admin/consultores
@@ -459,14 +605,14 @@ frontend        | cd frontend && pnpm dev             | 5173
 frontend-public | cd frontend-public && pnpm dev      | 5174
 
 Os dois frontends declaram `packageManager` em package.json (pnpm).
-Os respetivos vite.config.ts definem `server.host: true` (aceita
+Os respectivos vite.config.ts definem `server.host: true` (aceita
 ligações da rede local) e `server.port` (5173 / 5174). Portanto,
 ambos podem estar a correr ao mesmo tempo sem colidir.
 
 Ligação frontend → backend em dev
 - Os dois frontends usam `baseURL: '/api'` (relativo) em
   src/lib/api.ts.
-- Os respetivos vite.config.ts fazem proxy de `/api` para
+- Os respectivos vite.config.ts fazem proxy de `/api` para
   http://localhost:8000 (changeOrigin: true).
 - Não há .env nos frontends. A base URL do backend nunca aparece no
   código do cliente; fica sempre atrás do proxy Vite em dev, e atrás
@@ -594,6 +740,11 @@ O trabalho recente nesta área incluiu:
     pública (validador aceita LinkImovel e angariação).
   * `agencia_nome` e `consultor_representante` **nunca** aparecem ao
     vendedor.
+* **Equipas multi-consultor** (sem alterações visuais):
+  * O payload passa a servir `consultor_apresentacao` em vez do
+    dono do link (lista e detalhe uniformizados).
+  * A UI não muda — o `ConsultorPublic` (nome, agência, foto,
+    contactos) é o mesmo, apenas escolhido pela equipa.
 
 O ficheiro de entrada correcto do Vite no frontend privado é:
 frontend/index.html
@@ -640,7 +791,7 @@ buyers-crm/
 ├── TODO_buyers-crm.md
 └── CHANGELOG.md
 
-A árvore detalhada (254 ficheiros, 42 diretórios à data de
+A árvore detalhada (260 ficheiros, 42 diretórios à data de
 2026-11-04) está em PROJECT_STRUCTURE.txt. Actualizar esse
 ficheiro quando a estrutura mudar de forma significativa —
 idealmente na mesma alteração que introduz o novo ficheiro/pasta.

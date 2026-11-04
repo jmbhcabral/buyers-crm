@@ -6,13 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from app.deps import CurrentUser, DbSession, get_optional_consultor
-from app.models import ImovelVersao, ImovelVersaoCliente, VisitaImovel
+from app.models import Cliente, ImovelVersao, ImovelVersaoCliente, VisitaImovel
 from app.models.consultor import Consultor
 from app.schemas.visita_imovel import (
     VisitaImovelCreate,
     VisitaImovelRead,
     VisitaImovelUpdate,
 )
+from app.services.acesso import pode_gerir_cliente, pode_ver_versao
 
 router = APIRouter(tags=["visitas"])
 
@@ -31,26 +32,34 @@ def _obter_versao_com_acesso(
     versao = db.get(ImovelVersao, versao_id)
     if versao is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
-    if not user.is_admin:
-        if consultor is None or versao.consultor_id != consultor.id:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    if not pode_ver_versao(db, user, consultor, versao):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
     return versao
 
 
-def _validar_angariacao(db: DbSession, versao: ImovelVersao) -> None:
-    """Só se registam visitas a imóveis com vendedor associado."""
-    existe = db.scalar(
+def _validar_angariacao(
+    db: DbSession,
+    versao: ImovelVersao,
+    user: CurrentUser,
+    consultor: Consultor | None,
+) -> None:
+    """Só se registam visitas a imóveis com vendedor associado, e só se
+    o utilizador tiver acesso ao cliente vendedor."""
+    assoc = db.scalar(
         select(ImovelVersaoCliente).where(
             ImovelVersaoCliente.imovel_versao_id == versao.id,
             ImovelVersaoCliente.papel == "vendedor",
         )
     )
-    if existe is None:
+    if assoc is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "Este imóvel não está associado a nenhum cliente como vendedor. "
             "Associa primeiro o imóvel ao cliente vendedor.",
         )
+    cliente = db.get(Cliente, assoc.cliente_id)
+    if cliente is None or not pode_gerir_cliente(db, user, consultor, cliente):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
 
 
 def _obter_visita_com_acesso(
@@ -63,11 +72,8 @@ def _obter_visita_com_acesso(
     if visita is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Visita não encontrada")
     versao = db.get(ImovelVersao, visita.imovel_versao_id)
-    if versao is None:
+    if versao is None or not pode_ver_versao(db, user, consultor, versao):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Visita não encontrada")
-    if not user.is_admin:
-        if consultor is None or versao.consultor_id != consultor.id:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Visita não encontrada")
     return visita
 
 
@@ -88,7 +94,7 @@ def criar_visita(
 ) -> VisitaImovelRead:
     """Registra uma ficha de visita a um imóvel angariado."""
     versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
-    _validar_angariacao(db, versao)
+    _validar_angariacao(db, versao, user, consultor)
 
     visita = VisitaImovel(
         imovel_versao_id=versao.id,

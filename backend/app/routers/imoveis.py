@@ -1,27 +1,30 @@
 """Endpoints de imóveis (versões do consultor)."""
 
 from pathlib import Path
-from io import BytesIO
 from typing import Annotated
 
-from app.services.pdf import gerar_pdf
-
-
-from app.services.fotos import descarregar_fotos_do_canonico
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy import func, select
+from fastapi.responses import FileResponse
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.deps import (
     ApiKeyUser,
-    CurrentConsultor,
     CurrentUser,
     DbSession,
     get_optional_consultor,
 )
-from app.models import Cliente, Foto, ImovelCanonico, ImovelVersao, ImovelVersaoCliente
-from app.models.consultor import Consultor
+from app.models import (
+    Cliente,
+    ClienteConsultor,
+    Consultor,
+    Foto,
+    ImovelCanonico,
+    ImovelVersao,
+    ImovelVersaoCliente,
+    LinkCliente,
+    LinkImovel,
+)
 from app.schemas.imovel import (
     ClienteAssociadoRead,
     ImovelCanonicoComFotos,
@@ -31,6 +34,13 @@ from app.schemas.imovel import (
 )
 from app.schemas.pdf import PdfGeradoRead
 from app.schemas.ingest import ImovelIngestPayload, IngestResult
+from app.services.acesso import (
+    pode_desassociar_versao_cliente,
+    pode_editar_versao,
+    pode_gerir_cliente,
+    pode_ver_versao,
+)
+from app.services.fotos import descarregar_fotos_do_canonico
 from app.services.ingest import ingerir_imovel
 from app.services.pdf_storage import gerar_e_guardar_pdf
 
@@ -40,31 +50,29 @@ ConsultorOpcional = Annotated[Consultor | None, Depends(get_optional_consultor)]
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers de acesso
 # ---------------------------------------------------------------------------
-def _obter_versao_com_acesso(
-    db: Session,
-    versao_id: int,
-    user: CurrentUser,
-    consultor: Consultor | None,
+def _obter_versao_visivel(
+    db: Session, versao_id: int, user: CurrentUser, consultor: Consultor | None,
 ) -> ImovelVersao:
-    """Devolve a versão se o user tem acesso, senão 404.
-
-    Regras:
-    - Admin: acede a qualquer versão.
-    - Consultor: acede à sua própria versão.
-    - Sem consultor: 404.
-    """
+    """Ver a versão. Dono, OU versão associada a cliente da minha equipa."""
     versao = db.get(ImovelVersao, versao_id)
     if versao is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
-
-    if user.is_admin:
-        return versao
-
-    if consultor is None or versao.consultor_id != consultor.id:
+    if not pode_ver_versao(db, user, consultor, versao):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    return versao
 
+
+def _obter_versao_editavel(
+    db: Session, versao_id: int, user: CurrentUser, consultor: Consultor | None,
+) -> ImovelVersao:
+    """Editar/apagar a versão. Só o dono (ou admin)."""
+    versao = db.get(ImovelVersao, versao_id)
+    if versao is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    if not pode_editar_versao(user, consultor, versao):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
     return versao
 
 
@@ -78,10 +86,14 @@ def listar_imoveis(
     consultor: ConsultorOpcional,
     q: str | None = Query(default=None, description="Pesquisa por título ou property_id"),
     apenas_com_conflitos: bool = Query(default=False),
+    incluir_equipa: bool = Query(
+        default=False,
+        description="Inclui versões de colegas já associadas a clientes da equipa.",
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[ImovelVersaoListItem]:
-    """Lista versões de imóveis do consultor autenticado."""
+    """Lista versões de imóveis do consultor (+ equipa, se aplicável)."""
     if consultor is None:
         return []
 
@@ -90,6 +102,18 @@ def listar_imoveis(
         .options(selectinload(ImovelVersao.canonico))
         .where(ImovelVersao.consultor_id == consultor.id)
     )
+
+    if incluir_equipa and consultor.equipa_id is not None:
+        stmt = stmt.where(
+            or_(
+                ImovelVersao.consultor_id == consultor.id,
+                ImovelVersao.id.in_(
+                    select(ImovelVersaoCliente.imovel_versao_id)
+                    .join(Cliente, Cliente.id == ImovelVersaoCliente.cliente_id)
+                    .where(Cliente.equipa_id == consultor.equipa_id)
+                ),
+            )
+        )
 
     if apenas_com_conflitos:
         stmt = stmt.where(ImovelVersao.tem_conflitos.is_(True))
@@ -123,8 +147,6 @@ def listar_imoveis(
                 .group_by(ImovelVersaoCliente.imovel_versao_id)
             ).all()
         )
-
-        # Primeira foto por canónico
         primeira_foto: dict[int, int] = {}
         fotos_ordenadas = db.scalars(
             select(Foto)
@@ -155,6 +177,7 @@ def listar_imoveis(
                 num_fotos=contagem_fotos.get(v.imovel_canonico_id, 0),
                 num_clientes=contagem_clientes.get(v.id, 0),
                 primeira_foto_id=primeira_foto.get(v.imovel_canonico_id),
+                estado_imovel=v.estado_imovel,
             )
         )
     return resultado
@@ -164,12 +187,9 @@ def listar_imoveis(
 # Detalhe
 # ---------------------------------------------------------------------------
 def _build_detalhe(db: Session, versao: ImovelVersao) -> ImovelVersaoComDetalhes:
-    """Constrói o payload de detalhe a partir de uma versão já carregada."""
     canonico = db.scalar(
         select(ImovelCanonico)
-        .options(
-            selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True)))
-        )
+        .options(selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True))))
         .where(ImovelCanonico.id == versao.imovel_canonico_id)
     )
     if canonico is None:
@@ -199,20 +219,10 @@ def ingest_imovel(
     db: DbSession,
     user: ApiKeyUser,
 ) -> IngestResult:
-    """Recebe um imóvel do userscript e faz o ingest.
-
-    Autenticação via header `X-API-Key`.
-    O download de fotos corre em background — a resposta é imediata.
-    """
+    """Recebe um imóvel do userscript (via X-API-Key)."""
     resultado = ingerir_imovel(db, user, payload)
-
-    # Dispara download de fotos em background
     if resultado.fotos_novas > 0 or resultado.acao == "criado":
-        background_tasks.add_task(
-            descarregar_fotos_do_canonico,
-            resultado.imovel_canonico_id,
-        )
-
+        background_tasks.add_task(descarregar_fotos_do_canonico, resultado.imovel_canonico_id)
     return resultado
 
 
@@ -224,26 +234,20 @@ def obter_ficheiro_foto(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> FileResponse:
-    """Serve o ficheiro binário de uma foto (com validação de acesso)."""
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+    """Serve o ficheiro binário de uma foto.
 
+    Aceita ver (equipa vê versões associadas aos clientes da equipa), mas
+    não exige editar.
+    """
+    versao = _obter_versao_visivel(db, versao_id, user, consultor)
     foto = db.get(Foto, foto_id)
     if foto is None or foto.imovel_canonico_id != versao.imovel_canonico_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Foto não encontrada")
-
     if not foto.caminho_local:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "Ficheiro ainda não foi descarregado",
-        )
-
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ficheiro ainda não descarregado")
     caminho = Path(foto.caminho_local)
     if not caminho.exists():
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "Ficheiro não encontrado no disco",
-        )
-
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ficheiro não encontrado no disco")
     return FileResponse(caminho)
 
 
@@ -255,28 +259,11 @@ def gerar_pdf_imovel(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> PdfGeradoRead:
-    """Gera um PDF do imóvel para um cliente.
-
-    Substitui o anterior se já existir para esta versão+cliente.
-    """
-    from app.models import ClienteConsultor
-
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+    """Gera um PDF do imóvel para um cliente."""
+    versao = _obter_versao_editavel(db, versao_id, user, consultor)
     cliente = db.get(Cliente, cliente_id)
-    if cliente is None:
+    if cliente is None or not pode_gerir_cliente(db, user, consultor, cliente):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-
-    if not user.is_admin:
-        if consultor is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-        associado = db.scalar(
-            select(ClienteConsultor).where(
-                ClienteConsultor.cliente_id == cliente_id,
-                ClienteConsultor.consultor_id == consultor.id,
-            )
-        )
-        if associado is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
     pdf = gerar_e_guardar_pdf(db, versao, cliente)
     return PdfGeradoRead.model_validate(pdf)
@@ -289,14 +276,16 @@ def obter_imovel(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> ImovelVersaoComDetalhes:
-    """Devolve a versão + canónico + fotos."""
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+    """Detalhe da versão.
+
+    Visível ao dono e a membros da equipa do cliente a que a versão esteja
+    associada. `notas_internas` continua a ser devolvido — se quiseres
+    esconder ao colega, tens de mascarar aqui (decisão em aberto).
+    """
+    versao = _obter_versao_visivel(db, versao_id, user, consultor)
     return _build_detalhe(db, versao)
 
 
-# ---------------------------------------------------------------------------
-# Snapshot canónico (read-only)
-# ---------------------------------------------------------------------------
 @router.get("/{versao_id}/canonico", response_model=ImovelCanonicoComFotos)
 def obter_canonico(
     versao_id: int,
@@ -304,12 +293,7 @@ def obter_canonico(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> ImovelCanonicoComFotos:
-    """Devolve o snapshot canónico do imóvel (o que o Idealista diz).
-
-    Útil para o frontend mostrar "Idealista vs minha versão" lado a lado.
-    """
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
-
+    versao = _obter_versao_visivel(db, versao_id, user, consultor)
     canonico = db.scalar(
         select(ImovelCanonico)
         .options(selectinload(ImovelCanonico.fotos.and_(Foto.ativa.is_(True))))
@@ -317,13 +301,9 @@ def obter_canonico(
     )
     if canonico is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Canónico não encontrado")
-
     return ImovelCanonicoComFotos.model_validate(canonico)
 
 
-# ---------------------------------------------------------------------------
-# Editar versão
-# ---------------------------------------------------------------------------
 @router.patch("/{versao_id}", response_model=ImovelVersaoComDetalhes)
 def atualizar_imovel(
     versao_id: int,
@@ -332,8 +312,8 @@ def atualizar_imovel(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> ImovelVersaoComDetalhes:
-    """Edita campos da versão."""
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+    """Edita campos da versão. Só o dono (ou admin)."""
+    versao = _obter_versao_editavel(db, versao_id, user, consultor)
 
     data = payload.model_dump(exclude_unset=True)
     if data:
@@ -349,9 +329,6 @@ def atualizar_imovel(
     return _build_detalhe(db, versao)
 
 
-# ---------------------------------------------------------------------------
-# Apagar versão
-# ---------------------------------------------------------------------------
 @router.delete("/{versao_id}", status_code=status.HTTP_204_NO_CONTENT)
 def apagar_imovel(
     versao_id: int,
@@ -359,12 +336,8 @@ def apagar_imovel(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> None:
-    """Apaga a versão do consultor.
-
-    NOTA: o canónico e as outras versões ficam intactos.
-    Só apaga a versão do consultor autenticado (ou qualquer, se admin).
-    """
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
+    """Apaga a versão. Só o dono (ou admin)."""
+    versao = _obter_versao_editavel(db, versao_id, user, consultor)
     db.delete(versao)
     db.commit()
 
@@ -385,42 +358,27 @@ def associar_cliente(
     papel: str = Query(
         default="comprador",
         pattern="^(comprador|vendedor)$",
-        description="Papel da associação: 'comprador' (default) ou 'vendedor'.",
     ),
 ) -> None:
     """Associa um cliente à versão do imóvel.
 
     Regras:
-    - O user tem de ter acesso à versão.
-    - O user tem de ter acesso ao cliente (via cliente_consultor ou ser admin).
+    - User tem de VER a versão (`pode_ver_versao`) e GERIR o cliente
+      (`pode_gerir_cliente`). Um membro da equipa pode associar a versão
+      de um colega a um cliente da equipa.
     - `papel` distingue comprador de vendedor (angariação).
-    - Um imóvel só pode ter UM vendedor (angariação).
+    - Um imóvel só pode ter UM vendedor (angariação) — índice único parcial.
+    - **Um cliente só pode ter UMA versão por canónico** — bloqueio com 409.
     - Associar promove `e_comprador` / `e_vendedor` no cliente (additive-only).
-
-    Idempotência:
-    - Já associado com o mesmo papel → 204 sem alterações.
-    - Já associado com papel diferente → 409 (desassociar primeiro para mudar).
+    - `criado_por_consultor_id` regista quem criou a associação.
     """
-    from app.models import ClienteConsultor
+    versao = db.get(ImovelVersao, versao_id)
+    if versao is None or not pode_ver_versao(db, user, consultor, versao):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
 
-    versao = _obter_versao_com_acesso(db, versao_id, user, consultor)
-
-    # Verificar acesso ao cliente
     cliente = db.get(Cliente, cliente_id)
-    if cliente is None:
+    if cliente is None or not pode_gerir_cliente(db, user, consultor, cliente):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-
-    if not user.is_admin:
-        if consultor is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-        associado = db.scalar(
-            select(ClienteConsultor).where(
-                ClienteConsultor.cliente_id == cliente_id,
-                ClienteConsultor.consultor_id == consultor.id,
-            )
-        )
-        if associado is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
     existente = db.scalar(
         select(ImovelVersaoCliente).where(
@@ -437,7 +395,25 @@ def associar_cliente(
             f"Remove a associação antes de o associar como '{papel}'.",
         )
 
-    # NOVO: um imóvel só pode ter UM vendedor (angariação).
+    # Bloqueio de canónico duplicado: o mesmo cliente só pode ter UMA versão
+    # deste canónico (evita duplicados no link público e ambiguidade de
+    # "qual versão representa o imóvel para este cliente").
+    duplicado = db.scalar(
+        select(ImovelVersaoCliente)
+        .join(ImovelVersao, ImovelVersao.id == ImovelVersaoCliente.imovel_versao_id)
+        .where(
+            ImovelVersaoCliente.cliente_id == cliente_id,
+            ImovelVersao.imovel_canonico_id == versao.imovel_canonico_id,
+        )
+    )
+    if duplicado is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Este imóvel já está associado a este cliente "
+            f"(versão {duplicado.imovel_versao_id}).",
+        )
+
+    # Um imóvel só pode ter UM vendedor (angariação).
     if papel == "vendedor":
         vendedor_existente = db.scalar(
             select(ImovelVersaoCliente).where(
@@ -452,10 +428,7 @@ def associar_cliente(
                 "Remove o vendedor atual antes de associar outro.",
             )
 
-    # NOVO: sincronizar papéis do cliente (additive-only).
-    # Associar como vendedor/comprador promove o flag correspondente no
-    # cliente, para que o detalhe e o link público reflictam a associação.
-    # Nunca despromove — o utilizador pode desmarcar manualmente.
+    # Sync additive-only dos papéis do cliente.
     if papel == "vendedor" and not cliente.e_vendedor:
         cliente.e_vendedor = True
     elif papel == "comprador" and not cliente.e_comprador:
@@ -466,6 +439,7 @@ def associar_cliente(
             imovel_versao_id=versao_id,
             cliente_id=cliente_id,
             papel=papel,
+            criado_por_consultor_id=consultor.id if consultor else None,
         )
     )
     db.commit()
@@ -482,8 +456,17 @@ def desassociar_cliente(
     user: CurrentUser,
     consultor: ConsultorOpcional,
 ) -> None:
-    """Remove a associação entre um cliente e uma versão do imóvel."""
-    _obter_versao_com_acesso(db, versao_id, user, consultor)
+    """Remove a associação entre um cliente e uma versão.
+
+    - Só o consultor que criou a associação (ou admin) a pode remover.
+      Legacy: associações com `criado_por_consultor_id=NULL` recaem no
+      dono da versão.
+    - Remove também o `LinkImovel` de todos os links do cliente que
+      apontem para esta versão, para o imóvel sair do público.
+    """
+    versao = db.get(ImovelVersao, versao_id)
+    if versao is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
 
     assoc = db.scalar(
         select(ImovelVersaoCliente).where(
@@ -493,6 +476,24 @@ def desassociar_cliente(
     )
     if assoc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Associação não encontrada")
+
+    if not pode_desassociar_versao_cliente(user, consultor, assoc, versao):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Só o consultor que criou a associação a pode remover.",
+        )
+
+    # Limpa LinkImovel de todos os links deste cliente.
+    link_ids = db.scalars(
+        select(LinkCliente.id).where(LinkCliente.cliente_id == cliente_id)
+    ).all()
+    if link_ids:
+        db.execute(
+            delete(LinkImovel).where(
+                LinkImovel.link_id.in_(link_ids),
+                LinkImovel.imovel_versao_id == versao_id,
+            )
+        )
 
     db.delete(assoc)
     db.commit()
@@ -509,7 +510,7 @@ def listar_clientes_da_versao(
     consultor: ConsultorOpcional,
 ) -> list[ClienteAssociadoRead]:
     """Lista os clientes associados a uma versão do imóvel."""
-    _obter_versao_com_acesso(db, versao_id, user, consultor)
+    _obter_versao_visivel(db, versao_id, user, consultor)
 
     rows = db.execute(
         select(Cliente, ImovelVersaoCliente.papel)

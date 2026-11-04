@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.deps import CurrentUser, DbSession, get_optional_consultor
 from app.models import (
     Cliente,
-    ClienteConsultor,
     Consultor,
     ImovelVersao,
     InteracaoImovel,
@@ -25,6 +24,7 @@ from app.schemas.interacao import (
     NotaCreateCRM,
     NotaRead,
 )
+from app.services.acesso import pode_gerir_cliente, pode_ver_versao
 
 router = APIRouter(tags=["interacoes"])
 
@@ -37,17 +37,7 @@ def _acesso_cliente(
     cliente = db.get(Cliente, cliente_id)
     if cliente is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-    if user.is_admin:
-        return cliente
-    if consultor is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-    assoc = db.scalar(
-        select(ClienteConsultor).where(
-            ClienteConsultor.cliente_id == cliente_id,
-            ClienteConsultor.consultor_id == consultor.id,
-        )
-    )
-    if assoc is None:
+    if not pode_gerir_cliente(db, user, consultor, cliente):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
     return cliente
 
@@ -58,9 +48,7 @@ def _acesso_versao(
     versao = db.get(ImovelVersao, versao_id)
     if versao is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
-    if user.is_admin:
-        return versao
-    if consultor is None or versao.consultor_id != consultor.id:
+    if not pode_ver_versao(db, user, consultor, versao):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
     return versao
 
@@ -131,7 +119,7 @@ def listar_notas_cliente(
                 **NotaRead.model_validate(n).model_dump(),
                 autor_nome=autor_nome,
                 imovel_titulo=titulo,
-                cliente_nome=cliente.nome,      
+                cliente_nome=cliente.nome,
             )
         )
     return out
@@ -150,7 +138,7 @@ def criar_nota_crm(
     consultor: ConsultorOpcional,
 ) -> NotaRead:
     _acesso_cliente(db, cliente_id, user, consultor)
-    _acesso_versao(db, payload.imovel_versao_id, user, consultor) 
+    _acesso_versao(db, payload.imovel_versao_id, user, consultor)
 
     nota = NotaClienteImovel(
         cliente_id=cliente_id,
@@ -247,7 +235,7 @@ def listar_notas_imovel(
                 **NotaRead.model_validate(n).model_dump(),
                 autor_nome=autor_nome,
                 imovel_titulo=None,
-                cliente_nome=cliente.nome if cliente else None, 
+                cliente_nome=cliente.nome if cliente else None,
             )
         )
     return out

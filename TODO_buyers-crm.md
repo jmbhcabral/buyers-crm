@@ -3,6 +3,37 @@ Buyers CRM — TODO
 Última atualização: 2026-11-04
 
 Concluído nesta ronda (2026-11-04)
+- Equipas multi-consultor — entregue:
+  * Tabela `equipas` + `consultores.equipa_id` (1 consultor em no
+    máximo 1 equipa) + `clientes.equipa_id` (NULL = pessoal,
+    NOT NULL = partilhado pela equipa).
+  * `imoveis_versoes_clientes.criado_por_consultor_id` — só quem
+    criou a associação a pode remover; legacy recai no dono da
+    versão.
+  * `links_cliente.consultor_apresentacao_id` — define quem aparece
+    no link público (default = dono do link). Novo endpoint
+    `PATCH /links/{id}/apresentacao`.
+  * Serviço `services/acesso.py` centraliza toda a autorização
+    (`pode_gerir_cliente`, `pode_ver_versao`, `pode_editar_versao`,
+    `pode_desassociar_versao_cliente`, `pode_gerir_link`).
+  * CRUD de equipas em `/admin/equipas` + gestão de membros.
+  * Regras de negócio:
+    - Cliente de equipa: qualquer membro gere (clientes, links,
+      visitas, notas, interacções, qualificação, dashboard).
+    - Versão de imóvel: continua pessoal — só o dono edita. Colegas
+      vêem versões associadas a clientes da equipa.
+    - Curadoria do link: qualquer membro da equipa adiciona/remove
+      imóveis.
+    - Bloqueio de canónico duplicado por cliente (409) e por link
+      (409).
+    - Cleanup de `LinkImovel` ao desassociar cliente↔versão.
+  * Frontend CRM: tab **Equipas** no Admin; selector
+    **Visibilidade** (pessoal/equipa) no `FormCliente` e
+    `DialogNovoCliente`; selector **Consultor de apresentação** no
+    `LinkCliente` (só para clientes de equipa).
+  * Frontend público: sem alterações visuais — consome
+    `consultor_apresentacao` do payload.
+
 - Portal do vendedor — entregue:
   * `ImoveisVersoesClientes.papel` (`comprador` | `vendedor`),
     com índice único parcial por imóvel quando `papel='vendedor'`.
@@ -53,12 +84,12 @@ Concluído em rondas anteriores
 Próxima tarefa — a definir
 
 Escolher entre:
-- Estatísticas manuais de plataformas imobiliárias (ver Fase 3 abaixo).
 - Notificações (email/push) para novos pedidos de visita.
 - Filtros e pesquisa na aplicação pública.
+- Estatísticas manuais de plataformas imobiliárias (ver Fase 3).
 - Contagem de interesses/pedidos por imóvel no gestor de links
   (requer agregação no backend).
-- Testes de integração das visitas + estatísticas.
+- Testes de integração das visitas + estatísticas + equipas.
 
 ⸻
 
@@ -70,8 +101,11 @@ CRM e gestão de imóveis
 - Melhorar a responsividade mobile do CRM (sidebar colapsável).
 - Considerar estado_imovel como filtro na listagem de imóveis.
 - Filtro por papel (comprador / vendedor) na listagem de clientes.
+- Filtro por visibilidade (pessoal / equipa) na listagem de clientes.
 - Badge de estado da qualificação na listagem de clientes
   (hoje só aparece no detalhe).
+- Badge de equipa na listagem de clientes (indicação visual de
+  visibilidade).
 - UI dedicada de angariações (lista / gestão centralizada). Hoje só
   se vê o papel na secção "Clientes associados" do detalhe do
   imóvel.
@@ -85,7 +119,19 @@ Aplicação pública
 
 Clientes e consultores
 - Notificar o consultor quando o cliente abre o link.
-- Multi-consultor com partilha.
+- **Equipas — follow-ups:**
+  * Mostrar nome da equipa no selector do `FormCliente` para
+    consultores não-admin (hoje mostra "Minha Equipa" genérico;
+    requer endpoint `GET /api/equipas/minha`).
+  * Mostrar nome da equipa no `LinkCliente` e no badge do detalhe
+    do cliente.
+  * Notificar membros da equipa quando um colega altera o link ou
+    adiciona cliente.
+  * Histórico de mudanças de equipa de um cliente.
+  * `notas_internas` de versões de colegas: decidir se devem ser
+    mascaradas em `_build_detalhe` para não-donos.
+  * UI de "consultores da equipa" no detalhe da equipa (hoje
+    admin-only no diálogo de gestão).
 - Ficha de qualificação de vendedor (após modelo de angariação
   consolidado).
 - Histórico de qualificações (uma linha por reunião, em vez de
@@ -152,6 +198,21 @@ Qualidade e manutenção
   - Exclusão de `agencia_nome` / `consultor_representante` /
     `notas_internas` no payload público.
   Adiado por decisão da equipa; validado manualmente em dev.
+- **Testes de integração para equipas:**
+  - Consultor fora da equipa recebe 404 em clientes/links/versões
+    da equipa.
+  - `pode_gerir_cliente` (pessoal vs equipa) — matriz completa.
+  - `pode_ver_versao` (dono vs colega via cliente da equipa).
+  - `pode_desassociar_versao_cliente` (criador vs outro; legacy =
+    dono da versão).
+  - Bloqueio 409 de canónico duplicado (associação e link).
+  - Cleanup de `LinkImovel` ao desassociar.
+  - Unicidade de link por cliente de equipa.
+  - `PATCH /links/{id}/apresentacao` (validação de equipa).
+  - Migração: backfill de `consultor_apresentacao_id` e
+    `criado_por_consultor_id`.
+  Adiado por decisão da equipa; migração + fluxo validados
+  manualmente em dev.
 
 Infraestrutura
 - Validar o funcionamento do filtro por labels do Watchtower. ✅
@@ -174,4 +235,6 @@ Administração
 - PATCH /admin/consultores/{id} com ativo (desativar sem apagar).
 - Criar co-admin via UI (checkbox is_admin no diálogo de novo consultor).
 - Auditoria persistente (admin_audit_log) para criação/alteração de
-  credenciais.
+  credenciais e alterações de equipa.
+- UI de equipas: editar nome + reordenar membros + indicar
+  "consultor principal" da equipa (hoje só nome + membros).

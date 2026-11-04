@@ -10,6 +10,7 @@ from app.models.base import PKMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.cliente import Cliente
+    from app.models.equipa import Equipa
     from app.models.imovel_versao import ImovelVersao
     from app.models.user import User
 
@@ -24,6 +25,12 @@ class Consultor(Base, PKMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
+    equipa_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("equipas.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     telefone: Mapped[str | None] = mapped_column(String(32))
     nif: Mapped[str | None] = mapped_column(String(16))
     bio: Mapped[str | None] = mapped_column(Text)
@@ -33,6 +40,7 @@ class Consultor(Base, PKMixin, TimestampMixin):
 
     # Relações
     user: Mapped["User"] = relationship(back_populates="consultor")
+    equipa: Mapped["Equipa | None"] = relationship(back_populates="consultores")
 
     clientes: Mapped[list["Cliente"]] = relationship(
         secondary="cliente_consultor",
@@ -44,4 +52,7 @@ class Consultor(Base, PKMixin, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Consultor id={self.id} user_id={self.user_id}>"
+        return (
+            f"<Consultor id={self.id} user_id={self.user_id} "
+            f"equipa_id={self.equipa_id}>"
+        )

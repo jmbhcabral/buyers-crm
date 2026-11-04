@@ -4,8 +4,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Save } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Loader2, Save, Users2 } from 'lucide-react'
 import { useAtualizarCliente } from '@/hooks/use-clientes'
+import { useEquipasDisponiveis } from '@/hooks/use-equipas'
 import type { Cliente } from '@/types'
 import { notify } from '@/lib/toast'
 
@@ -13,12 +21,12 @@ interface Props {
   cliente: Cliente
 }
 
+const PESSOAL = '__pessoal__'
+
 export default function FormCliente({ cliente }: Props) {
   const update = useAtualizarCliente(cliente.id)
+  const { isAdmin, minhaEquipaId, equipas, carregando } = useEquipasDisponiveis()
 
-  // Inicialização direta — sem useEffect.
-  // Se o `cliente` mudar, o pai deve passar uma `key` diferente
-  // para forçar o remount (ver ClienteDetalhe.tsx).
   const [nome, setNome] = useState(cliente.nome)
   const [email, setEmail] = useState(cliente.email ?? '')
   const [telefone, setTelefone] = useState(cliente.telefone ?? '')
@@ -26,8 +34,25 @@ export default function FormCliente({ cliente }: Props) {
   const [notas, setNotas] = useState(cliente.notas ?? '')
   const [eComprador, setEComprador] = useState(cliente.e_comprador)
   const [eVendedor, setEVendedor] = useState(cliente.e_vendedor)
+  const [equipaId, setEquipaId] = useState<number | null>(cliente.equipa_id)
 
   const papeisValidos = eComprador || eVendedor
+
+  // O utilizador só pode escolher:
+  //  - null (pessoal) — sempre
+  //  - admin: qualquer equipa da lista
+  //  - não-admin com equipa: só a sua
+  const equipasOpcoes: { id: number; label: string }[] = isAdmin
+    ? equipas.map((e) => ({ id: e.id, label: e.nome }))
+    : minhaEquipaId
+      ? [{ id: minhaEquipaId, label: 'Minha Equipa' }]
+      : []
+
+  const equipaAtualValor = equipaId == null ? PESSOAL : String(equipaId)
+
+  function handleEquipaChange(v: string) {
+    setEquipaId(v === PESSOAL ? null : Number(v))
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -40,6 +65,7 @@ export default function FormCliente({ cliente }: Props) {
         telefone: telefone || null,
         nif: nif || null,
         notas: notas || null,
+        equipa_id: equipaId,
         e_comprador: eComprador,
         e_vendedor: eVendedor,
       },
@@ -118,6 +144,36 @@ export default function FormCliente({ cliente }: Props) {
               </p>
             )}
           </div>
+
+          {equipasOpcoes.length > 0 && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Users2 className="h-4 w-4" />
+                Visibilidade
+              </Label>
+              <Select value={equipaAtualValor} onValueChange={handleEquipaChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={PESSOAL}>Só para mim (pessoal)</SelectItem>
+                  {equipasOpcoes.map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      Equipa: {e.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {equipaId == null
+                  ? 'Cliente privado — só tu tens acesso.'
+                  : 'Cliente partilhado — todos os membros da equipa têm acesso.'}
+              </p>
+              {carregando && (
+                <p className="text-xs text-muted-foreground">A carregar equipas…</p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>

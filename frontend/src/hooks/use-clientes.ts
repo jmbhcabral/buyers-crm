@@ -40,6 +40,9 @@ export function useCriarCliente() {
       telefone?: string | null
       nif?: string | null
       notas?: string | null
+      // Visibilidade: null = pessoal, id = cliente partilhado pela equipa.
+      // Validado no backend (só a própria equipa).
+      equipa_id?: number | null
       // Pelo menos um dos papéis tem de ser true (defaults no backend:
       // e_comprador=true, e_vendedor=false). O backend valida.
       e_comprador?: boolean

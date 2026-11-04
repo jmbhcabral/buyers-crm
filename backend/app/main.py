@@ -13,6 +13,7 @@ from app.routers import (
     clientes,
     consultores,
     dashboard,
+    equipas,
     interacoes,
     links,
     imoveis,
@@ -40,7 +41,6 @@ if settings.is_dev:
         allow_headers=["*"],
     )
 else:
-    # Em prod, só aceita o Idealista (userscript) e o próprio CRM
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -55,7 +55,6 @@ else:
         expose_headers=["*"],
     )
 
-# PNA depois (Starlette aplica por ordem inversa — este é o exterior)
 app.add_middleware(PrivateNetworkAccessMiddleware)
 
 
@@ -70,6 +69,7 @@ app.include_router(imoveis.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_consultores.router, prefix="/api")
+app.include_router(equipas.router, prefix="/api")
 app.include_router(links.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
 app.include_router(router_consultores, prefix="/api")

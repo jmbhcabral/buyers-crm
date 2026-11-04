@@ -1,12 +1,16 @@
 """Tabelas de associação N:N."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.base import utcnow
+
+if TYPE_CHECKING:
+    from app.models.consultor import Consultor
 
 
 class ClienteConsultor(Base):
@@ -41,9 +45,11 @@ class ImovelVersaoCliente(Base):
                     de visita para esse imóvel).
 
     A PK é (imovel_versao_id, cliente_id). Consequência: o mesmo par
-    cliente↔versão só pode ter UM papel. Casos em que o mesmo cliente deva
-    ser comprador E vendedor do mesmo imóvel ficam fora do âmbito desta fase
-    (ver TODO).
+    cliente↔versão só pode ter UM papel.
+
+    `criado_por_consultor_id` regista quem criou a associação — só ele
+    (ou admin) a pode desassociar. É NULL nas linhas anteriores à migração
+    `g1h2i3j4k5l6`; nesse caso a regra recai no dono da versão.
     """
 
     __tablename__ = "imoveis_versoes_clientes"
@@ -65,10 +71,21 @@ class ImovelVersaoCliente(Base):
         server_default="comprador",
         index=True,
     )
+    criado_por_consultor_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("consultores.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,
         nullable=False,
+    )
+
+    # Relações
+    criado_por: Mapped["Consultor | None"] = relationship(
+        foreign_keys=[criado_por_consultor_id],
     )
 
     __table_args__ = (

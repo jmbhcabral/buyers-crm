@@ -1,22 +1,23 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useAuth } from '@/lib/use-auth'
 import type { User } from '@/types'
 
 export function useAtualizarMeuUser() {
-  const qc = useQueryClient()
+  const { refreshUser } = useAuth()
   return useMutation({
     mutationFn: async (payload: { nome?: string; email?: string }) => {
       const { data } = await api.patch<User>('/me', payload)
       return data
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['consultor', 'me'] })
+    onSuccess: async () => {
+      await refreshUser()
     },
   })
 }
 
 export function useUploadFotoPerfil() {
-  const qc = useQueryClient()
+  const { refreshUser } = useAuth()
   return useMutation({
     mutationFn: async (file: File) => {
       const form = new FormData()
@@ -26,20 +27,20 @@ export function useUploadFotoPerfil() {
       })
       return data
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['consultor', 'me'] })
+    onSuccess: async () => {
+      await refreshUser()
     },
   })
 }
 
 export function useApagarFotoPerfil() {
-  const qc = useQueryClient()
+  const { refreshUser } = useAuth()
   return useMutation({
     mutationFn: async () => {
       await api.delete('/me/consultor/foto')
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['consultor', 'me'] })
+    onSuccess: async () => {
+      await refreshUser()
     },
   })
 }

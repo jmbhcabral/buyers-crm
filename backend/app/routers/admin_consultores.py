@@ -2,6 +2,8 @@
 
 - POST   /admin/consultores                          — criar User + Consultor
 - PUT    /admin/consultores/{consultor_id}/credenciais — alterar email/password
+
+A atribuição de equipa faz-se pelo router `/admin/equipas`.
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -23,6 +25,7 @@ def _to_com_user(consultor: Consultor, user: User) -> ConsultorComUser:
     return ConsultorComUser(
         id=consultor.id,
         user_id=consultor.user_id,
+        equipa_id=consultor.equipa_id,
         telefone=consultor.telefone,
         nif=consultor.nif,
         bio=consultor.bio,
@@ -47,7 +50,6 @@ def criar_consultor(
     admin: AdminUser,
 ) -> ConsultorComUser:
     """Cria um User (role consultor ou admin) + Consultor, tudo ou nada."""
-    # Unicidade do email
     if db.scalar(select(User).where(User.email == payload.email)):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -62,7 +64,7 @@ def criar_consultor(
         ativo=True,
     )
     db.add(user)
-    db.flush()  # garante user.id
+    db.flush()
 
     consultor = Consultor(
         user_id=user.id,
@@ -71,6 +73,7 @@ def criar_consultor(
         bio=payload.bio,
         agencia=payload.agencia,
         ativo=True,
+        # equipa_id fica NULL por omissão; atribui-se via /admin/equipas
     )
     db.add(consultor)
     db.commit()
@@ -90,18 +93,13 @@ def alterar_credenciais_consultor(
     db: DbSession,
     admin: AdminUser,
 ) -> ConsultorComUser:
-    """Admin redefine email e/ou password de um consultor.
-
-    Não exige a password atual — é uma ação administrativa.
-    O consultor terá de voltar a autenticar-se com as novas credenciais.
-    """
+    """Admin redefine email e/ou password de um consultor."""
     consultor = db.get(Consultor, consultor_id)
     if consultor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Consultor não encontrado")
 
     user = db.get(User, consultor.user_id)
     if user is None:
-        # Estado inconsistente — não devia acontecer com FK
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Utilizador associado não encontrado",

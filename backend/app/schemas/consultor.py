@@ -25,6 +25,7 @@ class ConsultorRead(ConsultorBase):
 
     id: int
     user_id: int
+    equipa_id: int | None = None
     ativo: bool
     criado_em: datetime
     atualizado_em: datetime

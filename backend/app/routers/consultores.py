@@ -16,9 +16,6 @@ from app.schemas.consultor import ConsultorComUser, ConsultorRead, ConsultorUpda
 router = APIRouter(prefix="/consultores", tags=["consultores"])
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def _obter_consultor_ou_404(db: Session, consultor_id: int) -> Consultor:
     consultor = db.get(Consultor, consultor_id)
     if consultor is None:
@@ -32,6 +29,7 @@ def _to_com_user(db: Session, consultor: Consultor) -> ConsultorComUser:
     return ConsultorComUser(
         id=consultor.id,
         user_id=consultor.user_id,
+        equipa_id=consultor.equipa_id,
         telefone=consultor.telefone,
         nif=consultor.nif,
         bio=consultor.bio,
@@ -43,9 +41,6 @@ def _to_com_user(db: Session, consultor: Consultor) -> ConsultorComUser:
     )
 
 
-# ---------------------------------------------------------------------------
-# Listar todos os consultores ativos
-# ---------------------------------------------------------------------------
 @router.get("", response_model=list[ConsultorComUser])
 def listar_consultores(
     db: DbSession,
@@ -55,11 +50,7 @@ def listar_consultores(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[ConsultorComUser]:
-    """Lista consultores.
-
-    Útil para associar clientes/imóveis a outros consultores.
-    Por omissão, só mostra consultores ativos.
-    """
+    """Lista consultores ativos (para associar clientes/imóveis)."""
     stmt = select(Consultor, User).join(User, User.id == Consultor.user_id)
 
     if not incluir_inativos:
@@ -80,6 +71,7 @@ def listar_consultores(
         ConsultorComUser(
             id=c.id,
             user_id=c.user_id,
+            equipa_id=c.equipa_id,
             telefone=c.telefone,
             nif=c.nif,
             bio=c.bio,
@@ -93,9 +85,6 @@ def listar_consultores(
     ]
 
 
-# ---------------------------------------------------------------------------
-# Obter um consultor
-# ---------------------------------------------------------------------------
 @router.get("/{consultor_id}", response_model=ConsultorComUser)
 def obter_consultor(
     consultor_id: int,
@@ -106,9 +95,6 @@ def obter_consultor(
     return _to_com_user(db, consultor)
 
 
-# ---------------------------------------------------------------------------
-# Atualizar consultor — só admin
-# ---------------------------------------------------------------------------
 @router.patch("/{consultor_id}", response_model=ConsultorRead)
 def atualizar_consultor_admin(
     consultor_id: int,
@@ -116,7 +102,10 @@ def atualizar_consultor_admin(
     db: DbSession,
     admin: AdminUser,
 ) -> Consultor:
-    """Atualiza um consultor (apenas admin)."""
+    """Atualiza um consultor (apenas admin).
+
+    A atribuição de equipa faz-se em `/admin/equipas`, não aqui.
+    """
     consultor = _obter_consultor_ou_404(db, consultor_id)
 
     data = payload.model_dump(exclude_unset=True)
@@ -128,15 +117,11 @@ def atualizar_consultor_admin(
     return consultor
 
 
-# ---------------------------------------------------------------------------
-# Perfil do próprio — /me/consultor
-# ---------------------------------------------------------------------------
 me_router = APIRouter(prefix="/me/consultor", tags=["me"])
 
 
 @me_router.get("", response_model=ConsultorRead)
 def obter_meu_consultor(consultor: CurrentConsultor) -> Consultor:
-    """Devolve o perfil do consultor autenticado."""
     return consultor
 
 
@@ -146,11 +131,7 @@ def atualizar_meu_consultor(
     db: DbSession,
     consultor: CurrentConsultor,
 ) -> Consultor:
-    """Atualiza o perfil do consultor autenticado.
-
-    Só permite editar: telefone, nif, bio.
-    (nome e email vivem no User e são geridos noutro endpoint.)
-    """
+    """Atualiza o perfil do consultor autenticado (telefone/nif/bio/agencia)."""
     data = payload.model_dump(exclude_unset=True)
     for campo, valor in data.items():
         setattr(consultor, campo, valor)

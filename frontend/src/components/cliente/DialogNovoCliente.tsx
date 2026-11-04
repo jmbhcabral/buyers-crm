@@ -11,8 +11,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Loader2, Users2 } from 'lucide-react'
 import { useCriarCliente } from '@/hooks/use-clientes'
+import { useEquipasDisponiveis } from '@/hooks/use-equipas'
 import { notify } from '@/lib/toast'
 
 interface Props {
@@ -20,8 +28,12 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
+const PESSOAL = '__pessoal__'
+
 export default function DialogNovoCliente({ open, onOpenChange }: Props) {
   const criar = useCriarCliente()
+  const { isAdmin, minhaEquipaId, equipas } = useEquipasDisponiveis()
+
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -29,8 +41,15 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
   const [notas, setNotas] = useState('')
   const [eComprador, setEComprador] = useState(true)
   const [eVendedor, setEVendedor] = useState(false)
+  const [equipaId, setEquipaId] = useState<number | null>(null)
 
   const papeisValidos = eComprador || eVendedor
+
+  const equipasOpcoes: { id: number; label: string }[] = isAdmin
+    ? equipas.map((e) => ({ id: e.id, label: e.nome }))
+    : minhaEquipaId
+      ? [{ id: minhaEquipaId, label: 'Minha Equipa' }]
+      : []
 
   function reset() {
     setNome('')
@@ -40,6 +59,7 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
     setNotas('')
     setEComprador(true)
     setEVendedor(false)
+    setEquipaId(null)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -53,6 +73,7 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
         telefone: telefone || null,
         nif: nif || null,
         notas: notas || null,
+        equipa_id: equipaId,
         e_comprador: eComprador,
         e_vendedor: eVendedor,
       })
@@ -143,6 +164,39 @@ export default function DialogNovoCliente({ open, onOpenChange }: Props) {
               </p>
             )}
           </div>
+
+          {equipasOpcoes.length > 0 && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Users2 className="h-4 w-4" />
+                Visibilidade
+              </Label>
+              <Select
+                value={equipaId == null ? PESSOAL : String(equipaId)}
+                onValueChange={(v) =>
+                  setEquipaId(v === PESSOAL ? null : Number(v))
+                }
+                disabled={criar.isPending}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={PESSOAL}>Só para mim (pessoal)</SelectItem>
+                  {equipasOpcoes.map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      Equipa: {e.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {equipaId == null
+                  ? 'Cliente privado — só tu tens acesso.'
+                  : 'Cliente partilhado — todos os membros da equipa têm acesso.'}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>

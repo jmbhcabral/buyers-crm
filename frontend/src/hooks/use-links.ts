@@ -48,7 +48,11 @@ export function useLinkAnalytics(linkId: number) {
 export function useCriarLink() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (payload: { cliente_id: number; expira_em_dias?: number }) => {
+    mutationFn: async (payload: {
+      cliente_id: number
+      expira_em_dias?: number
+      consultor_apresentacao_id?: number | null
+    }) => {
       const { data } = await api.post<Link>('/links', payload)
       return data
     },
@@ -81,6 +85,31 @@ export function useRevogarLink() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['links'] })
+    },
+  })
+}
+
+// NOVO — define o consultor de apresentação no link público.
+// Passar `null` faz fallback para o dono do link.
+export function useAlterarApresentacaoLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      linkId,
+      consultorApresentacaoId,
+    }: {
+      linkId: number
+      consultorApresentacaoId: number | null
+    }) => {
+      const { data } = await api.patch<Link>(`/links/${linkId}/apresentacao`, {
+        consultor_apresentacao_id: consultorApresentacaoId,
+      })
+      return data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['links'] })
+      qc.invalidateQueries({ queryKey: ['links', data.id] })
+      qc.invalidateQueries({ queryKey: ['links', 'cliente', data.cliente_id] })
     },
   })
 }

@@ -4,6 +4,7 @@ from app.models.api_key import ApiKey
 from app.models.associacoes import ClienteConsultor, ImovelVersaoCliente
 from app.models.cliente import Cliente
 from app.models.consultor import Consultor
+from app.models.equipa import Equipa
 from app.models.imovel_canonico import Foto, ImovelCanonico, ImovelCanonicoHistorico
 from app.models.imovel_versao import ImovelVersao
 from app.models.interacao import InteracaoImovel, NotaClienteImovel
@@ -18,6 +19,7 @@ __all__ = [
     "Cliente",
     "ClienteConsultor",
     "Consultor",
+    "Equipa",
     "Foto",
     "ImovelCanonico",
     "ImovelCanonicoHistorico",
