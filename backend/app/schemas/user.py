@@ -11,6 +11,7 @@ class ConsultorRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    equipa_id: int | None = None
     telefone: str | None = None
     nif: str | None = None
     bio: str | None = None
