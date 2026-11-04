@@ -17,24 +17,32 @@ from app.models import (
     Foto,
     ImovelCanonico,
     ImovelVersao,
+    ImovelVersaoCliente,
     LinkAcesso,
     LinkCliente,
     LinkImovel,
     User,
-    InteracaoImovel, 
-    NotaClienteImovel
+    InteracaoImovel,
+    NotaClienteImovel,
+    VisitaImovel,
 )
 from app.schemas.public import (
     ConsultorPublic,
     PublicFotoRead,
     PublicImovelDetalhe,
     PublicImovelItem,
+    PublicImovelVendedorItem,
     PublicLinkInfo,
     PublicLinkResponse,
 )
 from app.schemas.interacao import (
     InteracaoRead, InteracoesResumo, InteresseToggle,
     NotaCreatePublic, NotaRead, PedidoCreate,
+)
+from app.schemas.visita_imovel import (
+    EstatisticasVendedor,
+    RatingsMedios,
+    VisitaImovelPublic,
 )
 from app.security import hash_link_token
 from app.services.consultor_utils import build_consultor_read
@@ -46,12 +54,7 @@ router = APIRouter(prefix="/public/links", tags=["public"])
 router_consultores = APIRouter(prefix="/public/consultores", tags=["public"])
 
 def _no_cache(response: Response) -> None:
-    """Obriga o browser a não cachear respostas públicas.
-
-    Essencial: se o link for revogado, o browser não deve continuar a servir
-    a versão em cache. Também evita que um 410 fique cacheado e "cole" mesmo
-    depois de renovar o link.
-    """
+    """Obriga o browser a não cachear respostas públicas."""
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -114,20 +117,52 @@ def _registar_acesso(
     db.commit()
 
 
-def _validar_imovel_no_link(db: DbSession, link: LinkCliente, versao_id: int) -> ImovelVersao:
-    """Confirma que o imóvel está no link. Senão 404."""
-    existe = db.scalar(
+def _resolver_imovel_no_link(
+    db: DbSession, link: LinkCliente, versao_id: int
+) -> tuple[ImovelVersao, str]:
+    """Resolve a versão e classifica a origem no link.
+
+    Devolve `(versao, 'comprador' | 'vendedor')`. Levanta 404 se a versão
+    não pertence a este link nem por LinkImovel nem por angariação.
+
+    É a base dos endpoints que aceitam ambos (detalhe, fotos).
+    """
+    versao = db.get(ImovelVersao, versao_id)
+    if versao is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    if versao.consultor_id != link.consultor_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+
+    # 1) está no link curado do comprador?
+    em_link = db.scalar(
         select(LinkImovel).where(
             LinkImovel.link_id == link.id,
             LinkImovel.imovel_versao_id == versao_id,
         )
     )
-    if existe is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    if em_link is not None:
+        return versao, "comprador"
 
-    versao = db.get(ImovelVersao, versao_id)
-    if versao is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    # 2) é angariação activa do cliente do link?
+    if link.cliente.e_vendedor:
+        ang = db.scalar(
+            select(ImovelVersaoCliente).where(
+                ImovelVersaoCliente.imovel_versao_id == versao_id,
+                ImovelVersaoCliente.cliente_id == link.cliente_id,
+                ImovelVersaoCliente.papel == "vendedor",
+            )
+        )
+        if ang is not None:
+            return versao, "vendedor"
+
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+
+
+def _validar_imovel_no_link(
+    db: DbSession, link: LinkCliente, versao_id: int
+) -> ImovelVersao:
+    """Compat — devolve só a versão. Aceita comprador e vendedor."""
+    versao, _ = _resolver_imovel_no_link(db, link, versao_id)
     return versao
 
 
@@ -146,11 +181,13 @@ def _build_consultor_public(db: DbSession, consultor_id: int) -> ConsultorPublic
     return ConsultorPublic(
         id=consultor.id,
         nome=user.nome if user else "",
-        email=user.email if user else None,       # <-- NOVO
+        email=user.email if user else None,
         agencia=consultor.agencia,
         telefone=consultor.telefone,
         foto_url=foto_url,
     )
+
+
 # ---------------------------------------------------------------------------
 # GET /api/public/links/{token}
 # ---------------------------------------------------------------------------
@@ -165,6 +202,7 @@ def obter_link_publico(
     _no_cache(response)
     link = _obter_link_valido(db, token)
 
+    # Universo comprador: LinkImovel curado
     rows = db.execute(
         select(LinkImovel, ImovelVersao, ImovelCanonico)
         .join(ImovelVersao, ImovelVersao.id == LinkImovel.imovel_versao_id)
@@ -172,6 +210,21 @@ def obter_link_publico(
         .where(LinkImovel.link_id == link.id)
         .order_by(LinkImovel.ordem, LinkImovel.criado_em)
     ).all()
+
+    # Q2 — excluir da lista de comprador os imóveis que este cliente vende
+    canonico_ids_vendedor: set[int] = set(
+        db.scalars(
+            select(ImovelVersao.imovel_canonico_id)
+            .join(
+                ImovelVersaoCliente,
+                ImovelVersaoCliente.imovel_versao_id == ImovelVersao.id,
+            )
+            .where(
+                ImovelVersaoCliente.cliente_id == link.cliente_id,
+                ImovelVersaoCliente.papel == "vendedor",
+            )
+        ).all()
+    )
 
     canonico_ids = [c.id for _, _, c in rows]
     contagem_fotos: dict[int, int] = {}
@@ -185,7 +238,6 @@ def obter_link_publico(
                 .group_by(Foto.imovel_canonico_id)
             ).all()
         )
-
         fotos_ordenadas = db.scalars(
             select(Foto)
             .where(Foto.imovel_canonico_id.in_(canonico_ids), Foto.ativa.is_(True))
@@ -197,6 +249,8 @@ def obter_link_publico(
 
     imoveis_out: list[PublicImovelItem] = []
     for li, v, c in rows:
+        if c.id in canonico_ids_vendedor:
+            continue
         foto_id = primeira_foto.get(c.id)
         foto_url = (
             f"/api/public/links/{token}/imoveis/{li.imovel_versao_id}/fotos/{foto_id}"
@@ -212,9 +266,98 @@ def obter_link_publico(
                 localizacao=v.localizacao,
                 num_fotos=contagem_fotos.get(c.id, 0),
                 primeira_foto_url=foto_url,
-                estado_imovel=v.estado_imovel
+                estado_imovel=v.estado_imovel,
             )
         )
+
+    # Universo vendedor: angariações
+    imoveis_vendedor_out: list[PublicImovelVendedorItem] = []
+    if link.cliente.e_vendedor:
+        vendedor_rows = db.execute(
+            select(ImovelVersao, ImovelCanonico)
+            .join(ImovelCanonico, ImovelCanonico.id == ImovelVersao.imovel_canonico_id)
+            .join(
+                ImovelVersaoCliente,
+                ImovelVersaoCliente.imovel_versao_id == ImovelVersao.id,
+            )
+            .where(
+                ImovelVersaoCliente.cliente_id == link.cliente_id,
+                ImovelVersaoCliente.papel == "vendedor",
+                ImovelVersao.consultor_id == link.consultor_id,
+            )
+            .order_by(ImovelVersao.atualizado_em.desc())
+        ).all()
+
+        vendedor_versao_ids = [v.id for v, _ in vendedor_rows]
+
+        stats_por_versao: dict[int, dict] = {}
+        if vendedor_versao_ids:
+            stat_rows = db.execute(
+                select(
+                    VisitaImovel.imovel_versao_id,
+                    func.count(VisitaImovel.id).label("n"),
+                    func.avg(VisitaImovel.rating_global).label("rg"),
+                    func.max(VisitaImovel.data_visita).label("ultima"),
+                )
+                .where(VisitaImovel.imovel_versao_id.in_(vendedor_versao_ids))
+                .group_by(VisitaImovel.imovel_versao_id)
+            ).all()
+            for versao_id_, n_, rg_, ultima_ in stat_rows:
+                stats_por_versao[versao_id_] = {
+                    "n": int(n_),
+                    "rg": float(rg_) if rg_ is not None else None,
+                    "ultima": ultima_,
+                }
+
+        canonico_ids_vend = [c.id for _, c in vendedor_rows]
+        contagem_fotos_v: dict[int, int] = {}
+        primeira_foto_v: dict[int, int] = {}
+        if canonico_ids_vend:
+            contagem_fotos_v = dict(
+                db.execute(
+                    select(Foto.imovel_canonico_id, func.count())
+                    .where(
+                        Foto.imovel_canonico_id.in_(canonico_ids_vend),
+                        Foto.ativa.is_(True),
+                    )
+                    .group_by(Foto.imovel_canonico_id)
+                ).all()
+            )
+            fotos_ordenadas_v = db.scalars(
+                select(Foto)
+                .where(
+                    Foto.imovel_canonico_id.in_(canonico_ids_vend),
+                    Foto.ativa.is_(True),
+                )
+                .order_by(Foto.imovel_canonico_id, Foto.ordem)
+            ).all()
+            for f in fotos_ordenadas_v:
+                if f.imovel_canonico_id not in primeira_foto_v:
+                    primeira_foto_v[f.imovel_canonico_id] = f.id
+
+        for idx, (v, c) in enumerate(vendedor_rows):
+            foto_id = primeira_foto_v.get(c.id)
+            foto_url = (
+                f"/api/public/links/{token}/imoveis/{v.id}/fotos/{foto_id}"
+                if foto_id is not None
+                else None
+            )
+            st = stats_por_versao.get(v.id, {})
+            imoveis_vendedor_out.append(
+                PublicImovelVendedorItem(
+                    imovel_versao_id=v.id,
+                    ordem=idx,
+                    titulo=v.titulo,
+                    preco=v.preco,
+                    localizacao=v.localizacao,
+                    num_fotos=contagem_fotos_v.get(c.id, 0),
+                    primeira_foto_url=foto_url,
+                    estado_imovel=v.estado_imovel,
+                    num_visitas=st.get("n", 0),
+                    rating_global_medio=st.get("rg"),
+                    ultima_visita_em=st.get("ultima"),
+                )
+            )
 
     consultor_public = _build_consultor_public(db, link.consultor_id)
 
@@ -224,10 +367,75 @@ def obter_link_publico(
         link=PublicLinkInfo(
             cliente_nome_mascarado=_mascarar_nome(link.cliente.nome),
             expira_em=link.expira_em,
+            e_comprador=link.cliente.e_comprador,
+            e_vendedor=link.cliente.e_vendedor,
         ),
         imoveis=imoveis_out,
+        imoveis_vendedor=imoveis_vendedor_out,
         consultor=consultor_public,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/public/links/{token}/imoveis-vendedor/{versao_id}/estatisticas
+# ---------------------------------------------------------------------------
+@router.get(
+    "/{token}/imoveis-vendedor/{versao_id}/estatisticas",
+    response_model=EstatisticasVendedor,
+)
+def obter_estatisticas_vendedor(
+    token: str,
+    versao_id: int,
+    response: Response,
+    db: DbSession,
+) -> EstatisticasVendedor:
+    """Estatísticas do imóvel angariado, visíveis ao vendedor."""
+    _no_cache(response)
+    link = _obter_link_valido(db, token)
+
+    # Validação: só angariações do próprio cliente
+    versao = db.get(ImovelVersao, versao_id)
+    if versao is None or versao.consultor_id != link.consultor_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+    ang = db.scalar(
+        select(ImovelVersaoCliente).where(
+            ImovelVersaoCliente.imovel_versao_id == versao_id,
+            ImovelVersaoCliente.cliente_id == link.cliente_id,
+            ImovelVersaoCliente.papel == "vendedor",
+        )
+    )
+    if ang is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
+
+    visitas = db.scalars(
+        select(VisitaImovel)
+        .where(VisitaImovel.imovel_versao_id == versao_id)
+        .order_by(VisitaImovel.data_visita.desc())
+    ).all()
+
+    def _avg(vals: list[int]) -> float | None:
+        return sum(vals) / len(vals) if vals else None
+
+    ratings_medios = RatingsMedios(
+        areas=_avg([v.rating_areas for v in visitas]),
+        acabamentos=_avg([v.rating_acabamentos for v in visitas]),
+        localizacao=_avg([v.rating_localizacao for v in visitas]),
+        apresentacao=_avg([v.rating_apresentacao for v in visitas]),
+        preco=_avg([v.rating_preco for v in visitas]),
+        global_=_avg([v.rating_global for v in visitas]),
+    )
+
+    return EstatisticasVendedor(
+        imovel_versao_id=versao_id,
+        num_visitas=len(visitas),
+        rating_global_medio=ratings_medios.global_,
+        ratings_medios=ratings_medios,
+        compraria_sim=sum(1 for v in visitas if v.compraria),
+        compraria_nao=sum(1 for v in visitas if not v.compraria),
+        visitas=[VisitaImovelPublic.model_validate(v) for v in visitas],
+        plataformas=[],
+    )
+
 
 # ---------------------------------------------------------------------------
 # GET /api/public/links/{token}/imoveis/{versao_id}
@@ -243,7 +451,7 @@ def obter_imovel_publico(
     """Detalhe completo de um imóvel do link. Regista um acesso ao imóvel."""
     _no_cache(response)
     link = _obter_link_valido(db, token)
-    versao = _validar_imovel_no_link(db, link, versao_id)
+    versao, origem = _resolver_imovel_no_link(db, link, versao_id)
 
     canonico = db.scalar(
         select(ImovelCanonico)
@@ -282,7 +490,8 @@ def obter_imovel_publico(
         url_original=canonico.url,
         fotos=fotos_out,
         consultor=consultor_public,
-        estado_imovel=versao.estado_imovel
+        estado_imovel=versao.estado_imovel,
+        e_angariacao=(origem == "vendedor"),
     )
 
 
@@ -297,7 +506,10 @@ def obter_foto_publica(
     db: DbSession,
     response: Response,
 ) -> FileResponse:
-    """Serve o ficheiro JPEG de uma foto do imóvel do link."""
+    """Serve o ficheiro JPEG de uma foto do imóvel do link.
+
+    Aceita tanto imóveis do link (comprador) como angariações (vendedor).
+    """
     _no_cache(response)
     link = _obter_link_valido(db, token)
     versao = _validar_imovel_no_link(db, link, versao_id)
@@ -317,7 +529,7 @@ def obter_foto_publica(
     return FileResponse(
         caminho,
         media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=86400"},  # 1 dia
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 
@@ -326,7 +538,7 @@ def obter_foto_consultor(
     consultor_id: int,
     db: DbSession,
 ) -> FileResponse:
-    """Serve a foto de perfil do consultor (público — usado na app de clientes)."""
+    """Serve a foto de perfil do consultor (público)."""
 
     consultor = db.get(Consultor, consultor_id)
     if consultor is None or not consultor.foto_caminho:
@@ -336,7 +548,6 @@ def obter_foto_consultor(
     if not caminho.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ficheiro não encontrado")
 
-    # Cache 1 dia — a foto raramente muda
     return FileResponse(
         caminho,
         media_type="image/jpeg",
@@ -403,7 +614,14 @@ def toggle_interesse(
     db: DbSession,
 ) -> None:
     link = _obter_link_valido(db, token)
-    _validar_imovel_no_link(db, link, versao_id)
+    _versao, origem = _resolver_imovel_no_link(db, link, versao_id)
+
+    # Um vendedor não põe interesse no imóvel que ele próprio vende.
+    if origem == "vendedor":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Este imóvel está em angariação — não pode ser marcado como interesse.",
+        )
 
     existente = db.scalar(
         select(InteracaoImovel).where(
@@ -440,7 +658,13 @@ def criar_pedido_publico(
     db: DbSession,
 ) -> InteracaoRead:
     link = _obter_link_valido(db, token)
-    _validar_imovel_no_link(db, link, versao_id)
+    _versao, origem = _resolver_imovel_no_link(db, link, versao_id)
+
+    if origem == "vendedor":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Este imóvel está em angariação — não aceita pedidos de comprador.",
+        )
 
     if payload.tipo not in ("pedido_visita", "pedido_info"):
         raise HTTPException(
@@ -491,7 +715,7 @@ def listar_notas_publicas(
     token: str,
     response: Response,
     db: DbSession,
-    imovel_versao_id: int,                      
+    imovel_versao_id: int,
 ) -> list[NotaRead]:
     _no_cache(response)
     link = _obter_link_valido(db, token)
@@ -519,7 +743,7 @@ def criar_nota_publica(
     db: DbSession,
 ) -> NotaRead:
     link = _obter_link_valido(db, token)
-    _validar_imovel_no_link(db, link, payload.imovel_versao_id)  
+    _validar_imovel_no_link(db, link, payload.imovel_versao_id)
 
     nota = NotaClienteImovel(
         cliente_id=link.cliente_id,

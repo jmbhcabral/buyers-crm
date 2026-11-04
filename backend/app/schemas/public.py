@@ -6,7 +6,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
-# --- Consultor público (usado no header, lista e detalhe) ---
 class ConsultorPublic(BaseModel):
     id: int
     nome: str
@@ -16,13 +15,13 @@ class ConsultorPublic(BaseModel):
     foto_url: str | None = None
 
 
-# --- Metadata do link ---
 class PublicLinkInfo(BaseModel):
     cliente_nome_mascarado: str
     expira_em: datetime
+    e_comprador: bool = True
+    e_vendedor: bool = False
 
 
-# --- Item da lista de imóveis ---
 class PublicImovelItem(BaseModel):
     imovel_versao_id: int
     ordem: int
@@ -34,14 +33,19 @@ class PublicImovelItem(BaseModel):
     estado_imovel: str = "disponivel"
 
 
-# --- Resposta da lista ---
+class PublicImovelVendedorItem(PublicImovelItem):
+    num_visitas: int = 0
+    rating_global_medio: float | None = None
+    ultima_visita_em: datetime | None = None
+
+
 class PublicLinkResponse(BaseModel):
     link: PublicLinkInfo
     imoveis: list[PublicImovelItem]
-    consultor: ConsultorPublic | None = None       # <-- NOVO
+    imoveis_vendedor: list[PublicImovelVendedorItem] = []
+    consultor: ConsultorPublic | None = None
 
 
-# --- Foto ---
 class PublicFotoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,7 +58,6 @@ class PublicFotoRead(BaseModel):
     titulo: str | None = None
 
 
-# --- Detalhe do imóvel ---
 class PublicImovelDetalhe(BaseModel):
     imovel_versao_id: int
     titulo: str | None = None
@@ -72,3 +75,6 @@ class PublicImovelDetalhe(BaseModel):
     consultor: ConsultorPublic | None = None
 
     estado_imovel: str = "disponivel"
+    # NOVO: true quando o imóvel é uma angariação do próprio cliente.
+    # O frontend esconde AcoesImovel (Interesse/Visita/Notas) neste caso.
+    e_angariacao: bool = False

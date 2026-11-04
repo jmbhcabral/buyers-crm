@@ -382,12 +382,24 @@ def associar_cliente(
     db: DbSession,
     user: CurrentUser,
     consultor: ConsultorOpcional,
+    papel: str = Query(
+        default="comprador",
+        pattern="^(comprador|vendedor)$",
+        description="Papel da associação: 'comprador' (default) ou 'vendedor'.",
+    ),
 ) -> None:
     """Associa um cliente à versão do imóvel.
 
     Regras:
     - O user tem de ter acesso à versão.
     - O user tem de ter acesso ao cliente (via cliente_consultor ou ser admin).
+    - `papel` distingue comprador de vendedor (angariação).
+    - Um imóvel só pode ter UM vendedor (angariação).
+    - Associar promove `e_comprador` / `e_vendedor` no cliente (additive-only).
+
+    Idempotência:
+    - Já associado com o mesmo papel → 204 sem alterações.
+    - Já associado com papel diferente → 409 (desassociar primeiro para mudar).
     """
     from app.models import ClienteConsultor
 
@@ -410,7 +422,6 @@ def associar_cliente(
         if associado is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
-    # Verificar se já está associado (idempotente)
     existente = db.scalar(
         select(ImovelVersaoCliente).where(
             ImovelVersaoCliente.imovel_versao_id == versao_id,
@@ -418,12 +429,43 @@ def associar_cliente(
         )
     )
     if existente is not None:
-        return  # já está associado, não dá erro
+        if existente.papel == papel:
+            return  # idempotente
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Este cliente já está associado como '{existente.papel}'. "
+            f"Remove a associação antes de o associar como '{papel}'.",
+        )
+
+    # NOVO: um imóvel só pode ter UM vendedor (angariação).
+    if papel == "vendedor":
+        vendedor_existente = db.scalar(
+            select(ImovelVersaoCliente).where(
+                ImovelVersaoCliente.imovel_versao_id == versao_id,
+                ImovelVersaoCliente.papel == "vendedor",
+            )
+        )
+        if vendedor_existente is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Este imóvel já tem um vendedor associado. "
+                "Remove o vendedor atual antes de associar outro.",
+            )
+
+    # NOVO: sincronizar papéis do cliente (additive-only).
+    # Associar como vendedor/comprador promove o flag correspondente no
+    # cliente, para que o detalhe e o link público reflictam a associação.
+    # Nunca despromove — o utilizador pode desmarcar manualmente.
+    if papel == "vendedor" and not cliente.e_vendedor:
+        cliente.e_vendedor = True
+    elif papel == "comprador" and not cliente.e_comprador:
+        cliente.e_comprador = True
 
     db.add(
         ImovelVersaoCliente(
             imovel_versao_id=versao_id,
             cliente_id=cliente_id,
+            papel=papel,
         )
     )
     db.commit()
@@ -465,14 +507,24 @@ def listar_clientes_da_versao(
     db: DbSession,
     user: CurrentUser,
     consultor: ConsultorOpcional,
-) -> list[Cliente]:
+) -> list[ClienteAssociadoRead]:
     """Lista os clientes associados a uma versão do imóvel."""
     _obter_versao_com_acesso(db, versao_id, user, consultor)
 
-    stmt = (
-        select(Cliente)
+    rows = db.execute(
+        select(Cliente, ImovelVersaoCliente.papel)
         .join(ImovelVersaoCliente, ImovelVersaoCliente.cliente_id == Cliente.id)
         .where(ImovelVersaoCliente.imovel_versao_id == versao_id)
         .order_by(Cliente.nome)
-    )
-    return list(db.scalars(stmt).all())
+    ).all()
+
+    return [
+        ClienteAssociadoRead(
+            id=c.id,
+            nome=c.nome,
+            email=c.email,
+            telefone=c.telefone,
+            papel=papel,
+        )
+        for c, papel in rows
+    ]

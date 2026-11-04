@@ -158,3 +158,4 @@ class ClienteAssociadoRead(BaseModel):
     nome: str
     email: str | None = None
     telefone: str | None = None
+    papel: str = "comprador"

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -32,7 +32,19 @@ class ClienteConsultor(Base):
 
 
 class ImovelVersaoCliente(Base):
-    """N:N entre versões de imóvel e clientes."""
+    """N:N entre versões de imóvel e clientes.
+
+    `papel` distingue dois tipos de associação:
+    - `comprador`: imóvel sugerido ao cliente (entra na lista pública de comprador).
+    - `vendedor`:  imóvel que o cliente está a vender (angariação; origina o
+                    separador "Meus Imóveis" no link público e habilita fichas
+                    de visita para esse imóvel).
+
+    A PK é (imovel_versao_id, cliente_id). Consequência: o mesmo par
+    cliente↔versão só pode ter UM papel. Casos em que o mesmo cliente deva
+    ser comprador E vendedor do mesmo imóvel ficam fora do âmbito desta fase
+    (ver TODO).
+    """
 
     __tablename__ = "imoveis_versoes_clientes"
 
@@ -46,8 +58,22 @@ class ImovelVersaoCliente(Base):
         ForeignKey("clientes.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    papel: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="comprador",
+        server_default="comprador",
+        index=True,
+    )
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,
         nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "papel IN ('comprador', 'vendedor')",
+            name="ck_imoveis_versoes_clientes_papel",
+        ),
     )

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.models.cliente import Cliente
     from app.models.consultor import Consultor
     from app.models.imovel_canonico import ImovelCanonico
+    from app.models.visita_imovel import VisitaImovel
 
 
 class ImovelVersao(Base, PKMixin, TimestampMixin):
@@ -81,6 +82,13 @@ class ImovelVersao(Base, PKMixin, TimestampMixin):
     clientes: Mapped[list["Cliente"]] = relationship(
         secondary="imoveis_versoes_clientes",
         back_populates="imoveis_versoes",
+    )
+    # NOVO: fichas de visita a este imóvel (alimentam as estatísticas do
+    # cliente vendedor no link público).
+    visitas: Mapped[list["VisitaImovel"]] = relationship(
+        back_populates="versao",
+        cascade="all, delete-orphan",
+        order_by="VisitaImovel.data_visita.desc()",
     )
 
     def __repr__(self) -> str:

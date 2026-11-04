@@ -19,6 +19,7 @@ from app.routers import (
     pdfs,
     public,
     qualificacao_comprador,
+    visitas,
 )
 from app.routers.public import router_consultores
 
@@ -74,6 +75,7 @@ app.include_router(public.router, prefix="/api")
 app.include_router(router_consultores, prefix="/api")
 app.include_router(interacoes.router, prefix="/api")
 app.include_router(qualificacao_comprador.router, prefix="/api")
+app.include_router(visitas.router, prefix="/api")
 
 
 @app.get("/health", tags=["sistema"])

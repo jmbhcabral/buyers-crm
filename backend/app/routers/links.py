@@ -331,22 +331,26 @@ def adicionar_imovel(
 ) -> None:
     link = _obter_link_com_acesso(db, link_id, user, consultor)
 
-    # Verificar que o imovel_versao existe, é do consultor do link, e está
-    # associado ao cliente do link
+    # Verificar que o imovel_versao existe e é do consultor do link
     versao = db.get(ImovelVersao, payload.imovel_versao_id)
     if versao is None or versao.consultor_id != link.consultor_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
 
+    # O imóvel tem de estar associado ao cliente do link COMO COMPRADOR.
+    # Imóveis de angariação (papel='vendedor') entram no link pela lista
+    # automática "Meus Imóveis", não pelo LinkImovel curado.
     assoc = db.scalar(
         select(ImovelVersaoCliente).where(
             ImovelVersaoCliente.imovel_versao_id == payload.imovel_versao_id,
             ImovelVersaoCliente.cliente_id == link.cliente_id,
+            ImovelVersaoCliente.papel == "comprador",
         )
     )
     if assoc is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Este imóvel não está associado ao cliente do link",
+            "Este imóvel não está associado ao cliente como comprador. "
+            "Associa-o como comprador antes de o incluir no link.",
         )
 
     # Já está?

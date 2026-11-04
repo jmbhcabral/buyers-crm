@@ -11,6 +11,7 @@ from app.models.link_cliente import LinkAcesso, LinkCliente, LinkImovel
 from app.models.pdf_gerado import PdfGerado
 from app.models.qualificacao_comprador import QualificacaoComprador
 from app.models.user import User
+from app.models.visita_imovel import VisitaImovel
 
 __all__ = [
     "ApiKey",
@@ -30,4 +31,5 @@ __all__ = [
     "PdfGerado",
     "QualificacaoComprador",
     "User",
+    "VisitaImovel",
 ]
