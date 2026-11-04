@@ -67,11 +67,11 @@ export function DetalhePage() {
   const fotos = data.fotos
   const fotoAtual = fotos[fotoAtiva]
   const versaoIdNum = Number(versaoId)
+  const mostrarAcoes = !data.e_angariacao
 
   return (
     <Layout consultor={data.consultor ?? null}>
-      {/* padding inferior para não ser tapado pela sticky bar em mobile */}
-      <div className="pb-24 sm:pb-0">
+      <div className={mostrarAcoes ? 'pb-24 sm:pb-0' : ''}>
         <Link
           to={`/s/${token}`}
           className="inline-flex items-center text-sm text-primary font-medium mb-4"
@@ -79,7 +79,6 @@ export function DetalhePage() {
           ← Voltar
         </Link>
 
-        {/* Galeria */}
         {fotos.length > 0 && (
           <div className="mb-4">
             <div
@@ -111,7 +110,6 @@ export function DetalhePage() {
           </div>
         )}
 
-        {/* Info */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
           {fotos.length === 0 && (
             <div className="mb-2">
@@ -130,18 +128,25 @@ export function DetalhePage() {
             <p className="text-2xl font-bold text-primary mt-3">{data.preco}</p>
           )}
 
-          {/* Ações — desktop */}
-          <div className="hidden sm:block mt-4 border-t pt-3">
-            <AcoesImovel
-              token={token!}
-              imovelVersaoId={versaoIdNum}
-              estado={data.estado_imovel}
-              layout="sticky"
-            />
-          </div>
+          {data.e_angariacao ? (
+            <div className="mt-4 border-t pt-3">
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                Este imóvel está em angariação. As estatísticas de visitas
+                aparecem no cartão do imóvel, na lista.
+              </p>
+            </div>
+          ) : (
+            <div className="hidden sm:block mt-4 border-t pt-3">
+              <AcoesImovel
+                token={token!}
+                imovelVersaoId={versaoIdNum}
+                estado={data.estado_imovel}
+                layout="sticky"
+              />
+            </div>
+          )}
         </div>
 
-        {/* Características */}
         {data.caracteristicas && data.caracteristicas.length > 0 && (
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">
@@ -167,7 +172,6 @@ export function DetalhePage() {
           </div>
         )}
 
-        {/* Descrição */}
         {data.descricao && (
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Descrição</h2>
@@ -177,7 +181,6 @@ export function DetalhePage() {
           </div>
         )}
 
-        {/* Características específicas */}
         {data.caracteristicas_especificas && data.caracteristicas_especificas.length > 0 && (
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Detalhes</h2>
@@ -193,17 +196,17 @@ export function DetalhePage() {
         )}
       </div>
 
-      {/* Ações — sticky em mobile */}
-      <div className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t shadow-lg p-3 z-40">
-        <AcoesImovel
-          token={token!}
-          imovelVersaoId={versaoIdNum}
-          estado={data.estado_imovel}
-          layout="sticky"
-        />
-      </div>
+      {mostrarAcoes && (
+        <div className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t shadow-lg p-3 z-40">
+          <AcoesImovel
+            token={token!}
+            imovelVersaoId={versaoIdNum}
+            estado={data.estado_imovel}
+            layout="sticky"
+          />
+        </div>
+      )}
 
-      {/* Lightbox */}
       {lightbox && fotoAtual && (
         <div
           className="fixed inset-0 bg-black z-50 flex items-center justify-center p-4"

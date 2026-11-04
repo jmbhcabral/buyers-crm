@@ -18,6 +18,8 @@ export interface ConsultorPublic {
 export interface PublicLinkInfo {
   cliente_nome_mascarado: string
   expira_em: string
+  e_comprador: boolean
+  e_vendedor: boolean
 }
 
 export interface PublicImovelItem {
@@ -31,9 +33,16 @@ export interface PublicImovelItem {
   estado_imovel: EstadoImovel
 }
 
+export interface PublicImovelVendedorItem extends PublicImovelItem {
+  num_visitas: number
+  rating_global_medio: number | null
+  ultima_visita_em: string | null
+}
+
 export interface PublicLinkResponse {
   link: PublicLinkInfo
   imoveis: PublicImovelItem[]
+  imoveis_vendedor: PublicImovelVendedorItem[]
   consultor: ConsultorPublic | null
 }
 
@@ -60,6 +69,7 @@ export interface PublicImovelDetalhe {
   fotos: PublicFoto[]
   consultor: ConsultorPublic | null
   estado_imovel: EstadoImovel
+  e_angariacao: boolean
 }
 
 
@@ -92,4 +102,48 @@ export interface InteracoesResumo {
   pedidos: Interacao[]
   notas_nao_lidas: number
   por_imovel: Record<number, { interesse: number; pedidos: number }>
+}
+
+
+// ===========================================================================
+// Portal do vendedor
+// ===========================================================================
+
+export type VisitanteOrigem =
+  | 'agencia_externa' | 'particular' | 'cliente_proprio' | 'walk_in' | 'outro'
+
+export interface VisitaPublic {
+  id: number
+  data_visita: string
+  visitante_origem: VisitanteOrigem
+  gostou: string | null
+  nao_gostou: string | null
+  observacoes: string | null
+  rating_areas: number
+  rating_acabamentos: number
+  rating_localizacao: number
+  rating_apresentacao: number
+  rating_preco: number
+  rating_global: number
+  compraria: boolean
+}
+
+export interface RatingsMedios {
+  areas: number | null
+  acabamentos: number | null
+  localizacao: number | null
+  apresentacao: number | null
+  preco: number | null
+  global: number | null
+}
+
+export interface EstatisticasVendedor {
+  imovel_versao_id: number
+  num_visitas: number
+  rating_global_medio: number | null
+  ratings_medios: RatingsMedios
+  compraria_sim: number
+  compraria_nao: number
+  visitas: VisitaPublic[]
+  plataformas: unknown[]
 }
