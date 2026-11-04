@@ -23,7 +23,10 @@
 │   │       ├── b7c366f9bb72_add_link_cliente_tables.py
 │   │       ├── b8c4e2a1f9d3_add_papeis_cliente_qualificacao.py
 │   │       ├── c12ad887e21e_add_token_visible_to_links_cliente.py
-│   │       └── f3a1b2c4d5e6_add_estado_imovel_and_interacoes.py
+│   │       ├── d4e5f6a7b8c9_add_papel_to_imoveis_versoes_clientes.py
+│   │       ├── e6f7a8b9c0d1_add_unique_vendedor_per_versao.py
+│   │       ├── f3a1b2c4d5e6_add_estado_imovel_and_interacoes.py
+│   │       └── f7a8b9c0d1e2_create_visitas_imovel.py
 │   ├── alembic.ini
 │   ├── app
 │   │   ├── __init__.py
@@ -45,7 +48,8 @@
 │   │   │   ├── link_cliente.py
 │   │   │   ├── pdf_gerado.py
 │   │   │   ├── qualificacao_comprador.py
-│   │   │   └── user.py
+│   │   │   ├── user.py
+│   │   │   └── visita_imovel.py
 │   │   ├── routers
 │   │   │   ├── __init__.py
 │   │   │   ├── admin.py
@@ -61,7 +65,8 @@
 │   │   │   ├── me.py
 │   │   │   ├── pdfs.py
 │   │   │   ├── public.py
-│   │   │   └── qualificacao_comprador.py
+│   │   │   ├── qualificacao_comprador.py
+│   │   │   └── visitas.py
 │   │   ├── schemas
 │   │   │   ├── __init__.py
 │   │   │   ├── admin.py
@@ -76,7 +81,8 @@
 │   │   │   ├── pdf.py
 │   │   │   ├── public.py
 │   │   │   ├── qualificacao_comprador.py
-│   │   │   └── user.py
+│   │   │   ├── user.py
+│   │   │   └── visita_imovel.py
 │   │   ├── security.py
 │   │   ├── services
 │   │   │   ├── __init__.py
@@ -139,12 +145,14 @@
 │   │   │   │   └── StatCard.tsx
 │   │   │   ├── imovel
 │   │   │   │   ├── ClientesAssociados.tsx
+│   │   │   │   ├── DialogRegistarVisita.tsx
 │   │   │   │   ├── EstadoImovelSelect.tsx
 │   │   │   │   ├── FormImovel.tsx
 │   │   │   │   ├── FotoBlob.tsx
 │   │   │   │   ├── GaleriaFotos.tsx
 │   │   │   │   ├── SecaoInteracoesImovel.tsx
 │   │   │   │   ├── SecaoNotasImovel.tsx
+│   │   │   │   ├── SecaoVisitas.tsx
 │   │   │   │   └── SnapshotCanonico.tsx
 │   │   │   ├── layout
 │   │   │   │   ├── AppLayout.tsx
@@ -196,7 +204,8 @@
 │   │   │   ├── use-pdfs.ts
 │   │   │   ├── use-qualificacao-comprador.ts
 │   │   │   ├── use-theme.ts
-│   │   │   └── use-toast.ts
+│   │   │   ├── use-toast.ts
+│   │   │   └── use-visitas-imovel.ts
 │   │   ├── index.css
 │   │   ├── lib
 │   │   │   ├── api.ts
@@ -255,12 +264,14 @@
 │   │   ├── components
 │   │   │   ├── AcoesImovel.tsx
 │   │   │   ├── CardImovel.tsx
+│   │   │   ├── CardImovelVendedor.tsx
 │   │   │   ├── EstadoImovelBadge.tsx
 │   │   │   ├── Layout.tsx
 │   │   │   ├── Modal.tsx
 │   │   │   ├── ModalNotas.tsx
 │   │   │   └── ModalPedidoVisita.tsx
 │   │   ├── hooks
+│   │   │   ├── use-estatisticas-vendedor.ts
 │   │   │   └── use-interacoes.ts
 │   │   ├── index.css
 │   │   ├── lib
@@ -284,4 +295,4 @@
 └── userscript
     └── buyers-crm.user.js
 
-42 directories, 243 files
+42 directories, 254 files

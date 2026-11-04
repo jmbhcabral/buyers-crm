@@ -1,12 +1,12 @@
 Buyers CRM — Project Context
 
-Última actualização: 2026-11-03
+Última actualização: 2026-11-04
 
 1. Descrição do projecto
 
 O Buyers CRM é um CRM pessoal desenvolvido para consultores imobiliários.
 
-O objectivo é centralizar a captação, gestão e apresentação de imóveis a potenciais compradores.
+O objectivo é centralizar a captação, gestão e apresentação de imóveis a potenciais compradores, e dar ao vendedor visibilidade sobre o desempenho do imóvel que está a vender.
 
 Funcionalidades principais:
 
@@ -17,7 +17,11 @@ Funcionalidades principais:
 * Papéis do cliente: comprador, vendedor, ou ambos (ver §4).
 * Ficha de qualificação do comprador (guião de 4 blocos), preenchida
   no CRM depois da reunião (ver §4).
-* Associação de imóveis a clientes.
+* Associação de imóveis a clientes, com papel (comprador / vendedor).
+* Fichas de visita a imóveis angariados, preenchidas no CRM (ver §4).
+* Portal do vendedor: o cliente vendedor vê no link público as
+  estatísticas do imóvel que está a vender (visitas, feedback,
+  avaliações), sem ver dados pessoais dos visitantes.
 * Geração de PDFs personalizados.
 * Criação de páginas públicas com selecções de imóveis.
 * Partilha de páginas através de links acessíveis por telemóvel.
@@ -107,7 +111,9 @@ Frontend privado
     |
     +--> Gestão de clientes (com papéis e ficha de qualificação)
     |
-    +--> Associação de imóveis
+    +--> Associação de imóveis (comprador / vendedor)
+    |
+    +--> Fichas de visita
     |
     +--> Geração de PDFs
     |
@@ -139,12 +145,13 @@ Tabelas documentadas:
 * imoveis_versoes
 * imoveis_versoes_clientes
 * pdfs_gerados
-* links
+* links_cliente
 * link_imoveis
 * link_acessos
 * interacoes_imovel
 * notas_cliente_imovel
 * qualificacoes_comprador
+* visitas_imovel
 
 O perfil do consultor inclui:
 
@@ -174,12 +181,53 @@ Papéis do cliente e qualificação do comprador
 - `tem_imovel_venda` / `precisa_vender_comprar` na ficha são os
   sinalizadores do lado vendedor. Quando `tem_imovel_venda=true`, o
   formulário do CRM sugere marcar o cliente como vendedor (PATCH).
-- O lado vendedor completo (associação ao imóvel, ficha de
-  visitante, estatísticas no link público) é fase 2 e está em
-  TODO. A decisão de ter os dois booleanos hoje não bloqueia nada.
 - A secção "IDENTIFICAÇÃO DO IMÓVEL SOLICITADO" do PDF de
   qualificação não duplica dados: continua coberta por LinkImovel +
   InteracaoImovel.
+
+Associação cliente ↔ versão de imóvel
+- `ImovelVersaoCliente` — pivot N:N entre `Cliente` e `ImovelVersao`.
+  PK composta `(imovel_versao_id, cliente_id)`. Coluna `papel` com
+  CHECK `papel IN ('comprador','vendedor')` e default `comprador`.
+  Um mesmo par cliente↔versão só tem um papel (a PK composta impede
+  mais).
+- **`papel='comprador'`** — o imóvel é uma sugestão ao cliente.
+  Autoriza o `LinkImovel` (o imóvel entra no link público curado).
+- **`papel='vendedor'`** — o imóvel é uma angariação do cliente.
+  Autoriza o registo de `VisitaImovel` para esse imóvel, e coloca-o
+  automaticamente na lista "Meus Imóveis" do link público (sem
+  passar pelo `LinkImovel` curado).
+- **Índice único parcial** `uq_imoveis_versoes_clientes_vendedor` em
+  `imovel_versao_id` WHERE `papel='vendedor'`: um imóvel só tem UM
+  vendedor (angariação). Para trocar, desassociar primeiro.
+- **Sync additive-only**: associar um cliente como comprador/vendedor
+  promove `e_comprador` / `e_vendedor` no cliente para `true`. Nunca
+  despromove. O utilizador pode desmarcar manualmente no detalhe do
+  cliente.
+- **Regra Q2** — imóveis que o cliente está a vender são excluídos
+  da lista comprador do link público, para não aparecerem nas duas
+  tabs.
+
+Fichas de visita (lado vendedor)
+- `VisitaImovel` — ficha de visita preenchida pelo consultor no CRM
+  depois de cada visita ao imóvel angariado. `imovel_versao_id` FK
+  (ON DELETE CASCADE) — se a versão desaparece, as visitas
+  desaparecem.
+- **Internos** (nunca saem do CRM): `visitante_nome`,
+  `visitante_contacto`, `visitante_email`,
+  `consultor_representante`, `notas_internas`.
+- **Visíveis ao vendedor** (via `VisitaImovelPublic`): `data_visita`,
+  `visitante_origem` (`agencia_externa` | `particular` |
+  `cliente_proprio` | `walk_in` | `outro`), `gostou`, `nao_gostou`,
+  `observacoes`, 6 ratings 1–5 (`rating_areas`,
+  `rating_acabamentos`, `rating_localizacao`,
+  `rating_apresentacao`, `rating_preco`, `rating_global`) e
+  `compraria` (bool).
+- **`agencia_nome`** existe na tabela mas **não** sai para o
+  endpoint público — o nome da agência visitante é dado comercial
+  interno. Só a categoria `agencia_externa` é visível.
+- Ficha só pode ser criada se a versão tiver uma angariação activa
+  (`papel='vendedor'`). Caso contrário, 400.
 
 Imóvel e versão
 - `ImovelVersao.estado_imovel` — estado comercial por versão
@@ -191,6 +239,8 @@ Interações e notas
   cliente por imóvel. Campos `tipo` e `estado`
   (pendente | visto | concluido | cancelado). Índice único parcial em
   (cliente_id, imovel_versao_id) para tipo="interesse".
+- Interesse e pedidos ficam **bloqueados** para imóveis que são
+  angariações do próprio cliente (400 no backend).
 - `NotaClienteImovel` — thread de mensagens cliente↔consultor,
   **sempre ancorada a um imóvel**. A coluna imovel_versao_id é, em
   prática, obrigatória a partir de 2026-11-01. Permanece nullable
@@ -199,17 +249,21 @@ Interações e notas
   Marcação de leitura por destinatário.
 
 Links públicos
-- `Link` — token público associado a um cliente e a um consultor.
-  Campos relevantes: `token_prefix` (indexável), `token_visible`
-  (últimos caracteres mostrados na UI), `url_publica`, `ativo`,
-  `expira_em`, `revogado_em`, `ultimo_acesso_em`. Um cliente tem no
-  máximo um link ativo por consultor. O link não tem "tipo": cliente
-  comprador, vendedor ou ambos usam o mesmo token; o frontend público
-  decide o que renderizar.
+- `LinkCliente` — token público associado a um cliente e a um
+  consultor. Campos relevantes: `token_prefix` (indexável),
+  `token_visible` (últimos caracteres mostrados na UI),
+  `url_publica`, `ativo`, `expira_em`, `revogado_em`,
+  `ultimo_acesso_em`. Um cliente tem no máximo um link activo por
+  consultor. O link não tem "tipo": cliente comprador, vendedor ou
+  ambos usam o mesmo token; o frontend público decide o que
+  renderizar com base em `e_comprador` / `e_vendedor` devolvidos
+  pelo backend.
 - `LinkImovel` — associação N:N entre Link e ImovelVersao, com
-  `ordem` para controlar a apresentação.
+  `ordem`. Só aceita imóveis associados ao cliente como
+  **comprador**.
 - `LinkAcesso` — registo de acessos ao link (user_agent, referrer,
-  imovel_versao_id opcional) para analytics simples.
+  imovel_versao_id opcional) para analytics simples. **Não** é
+  usado nas estatísticas do vendedor (só `VisitaImovel`).
 
 5. Geração de links públicos com token
 
@@ -234,15 +288,30 @@ Mecânica
 - O consultor pode revogar o link (`revogado_em`) ou deixá-lo
   expirar; um novo link pode ser gerado substituindo o anterior.
 
+Universo de imóveis no link público
+- **Comprador** (`imoveis` na resposta): imóveis do `LinkImovel`
+  curados pelo consultor. Filtra pela regra Q2 — exclui canónicos que
+  o cliente está a vender.
+- **Vendedor** (`imoveis_vendedor` na resposta): imóveis cujo
+  `ImovelVersaoCliente.papel='vendedor'` e
+  `ImovelVersaoCliente.cliente_id = link.cliente_id`. Automático,
+  não passa pelo `LinkImovel`. Cada item traz agregados das visitas
+  (`num_visitas`, `rating_global_medio`, `ultima_visita_em`).
+- **Detalhe e fotos** aceitam ambos (comprador ou angariação). O
+  payload do detalhe traz `e_angariacao: bool` — o frontend público
+  esconde as `AcoesImovel` (Interesse / Visita / Notas) quando é
+  angariação.
+
 Endpoints (todos com prefixo `/api`)
 - CRM:
-  * POST   /links                       — cria link para um cliente
-  * GET    /clientes/{id}/link          — link ativo do cliente
-  * POST   /links/{id}/imoveis          — adiciona imóvel ao link
-  * DELETE /links/{id}/imoveis/{versao} — remove imóvel do link
-  * POST   /links/{id}/revogar          — revoga o link
-  * GET    /links/{id}/analytics        — acessos e por-imóvel
-- Público:
+  * POST   /links                                  — cria link
+  * GET    /clientes/{id}/link                     — link ativo
+  * POST   /links/{id}/imoveis                     — adiciona imóvel
+    (tem de estar associado como **comprador**)
+  * DELETE /links/{id}/imoveis/{versao}            — remove imóvel
+  * POST   /links/{id}/revogar                     — revoga link
+  * GET    /links/{id}/analytics                   — acessos
+- Público — comprador:
   * GET    /public/links/{token}
   * GET    /public/links/{token}/imoveis/{versao}
   * GET    /public/links/{token}/interacoes
@@ -252,12 +321,17 @@ Endpoints (todos com prefixo `/api`)
   * GET    /public/links/{token}/notas?imovel_versao_id=...
   * POST   /public/links/{token}/notas
   * PATCH  /public/links/{token}/notas/{id}/ler
+- Público — vendedor:
+  * GET    /public/links/{token}/imoveis-vendedor/{versao}/estatisticas
 
 Notas
 - O token identifica sempre um cliente. Do lado do backend, qualquer
-  operação sobre notas/pedidos filtra por
-  `link.cliente_id` — não há forma de um cliente aceder a dados de
-  outro através do mesmo token.
+  operação sobre notas/pedidos filtra por `link.cliente_id` — não há
+  forma de um cliente aceder a dados de outro através do mesmo token.
+- As estatísticas do vendedor agregam **apenas** `VisitaImovel`.
+  `LinkAcesso` (visualizações do link) não entra. A secção
+  `plataformas: []` está reservada para estatísticas manuais de
+  portais (Idealista, Imovirtual, etc.), fase 3.
 
 6. Endpoints documentados
 
@@ -290,6 +364,18 @@ Existem também endpoints para:
   * PUT    /clientes/{id}/qualificacao-comprador  (upsert; 409 se
     o cliente não for comprador)
   * DELETE /clientes/{id}/qualificacao-comprador
+* Associação cliente↔imóvel (CRM, autenticado):
+  * POST   /imoveis/{versao_id}/clientes/{cliente_id}?papel=...
+    (default `comprador`; 409 em conflito de papel ou em vendedor
+    duplicado)
+  * DELETE /imoveis/{versao_id}/clientes/{cliente_id}
+  * GET    /imoveis/{versao_id}/clientes  (devolve `papel` por
+    cliente)
+* Fichas de visita (CRM, autenticado):
+  * POST   /imoveis/{versao_id}/visitas  (400 sem angariação)
+  * GET    /imoveis/{versao_id}/visitas
+  * PATCH  /visitas/{visita_id}
+  * DELETE /visitas/{visita_id}
 * Administração (todos sob `Depends(get_admin_user)`):
   * GET   /admin/stats
   * GET   /admin/consultores
@@ -497,6 +583,17 @@ O trabalho recente nesta área incluiu:
 * Ações Interesse / Visita / Notas por imóvel.
 * Modais de pedido de visita e de notas.
 * Sticky bar de ações em mobile no detalhe.
+* **Portal do vendedor**:
+  * Tabs `Imóveis` / `Meus Imóveis` quando o cliente é ambos
+    (`e_comprador && e_vendedor`). Tab única directa caso contrário.
+  * Card `CardImovelVendedor` com sub-tabs `Resumo` / `Visitas`,
+    carregando as estatísticas on-demand.
+  * Detalhe público aceita angariações (`e_angariacao`) e esconde
+    as `AcoesImovel` nesse caso.
+  * Foto de capa dos imóveis angariados servida pela rota de fotos
+    pública (validador aceita LinkImovel e angariação).
+  * `agencia_nome` e `consultor_representante` **nunca** aparecem ao
+    vendedor.
 
 O ficheiro de entrada correcto do Vite no frontend privado é:
 frontend/index.html
@@ -543,8 +640,8 @@ buyers-crm/
 ├── TODO_buyers-crm.md
 └── CHANGELOG.md
 
-A árvore detalhada (243 ficheiros, 42 diretórios à data de
-2026-11-03) está em PROJECT_STRUCTURE.txt. Actualizar esse
+A árvore detalhada (254 ficheiros, 42 diretórios à data de
+2026-11-04) está em PROJECT_STRUCTURE.txt. Actualizar esse
 ficheiro quando a estrutura mudar de forma significativa —
 idealmente na mesma alteração que introduz o novo ficheiro/pasta.
 

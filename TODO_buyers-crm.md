@@ -1,8 +1,38 @@
 Buyers CRM — TODO
 
-Última atualização: 2026-11-03
+Última atualização: 2026-11-04
 
-Concluído nesta ronda
+Concluído nesta ronda (2026-11-04)
+- Portal do vendedor — entregue:
+  * `ImoveisVersoesClientes.papel` (`comprador` | `vendedor`),
+    com índice único parcial por imóvel quando `papel='vendedor'`.
+    Substitui a tabela pivot `angariacoes` originalmente planeada
+    (reutiliza o fluxo Tampermonkey existente).
+  * Tabela `visitas_imovel` com os campos do PDF: data/hora,
+    visitante (nome, contacto, email), consultor representante,
+    origem + agência, gostou / não gostou / observações, 6 ratings
+    (áreas, acabamentos, localização, apresentação, preço, global),
+    compraria sim/não, notas internas.
+  * Router CRM `/imoveis/{versao_id}/visitas` e `/visitas/{id}`.
+  * Endpoint público
+    `/public/links/{token}/imoveis-vendedor/{versao_id}/estatisticas`,
+    agregando apenas `VisitaImovel` (NÃO `LinkAcesso`).
+  * `PublicLinkResponse` com `e_comprador` / `e_vendedor` e lista
+    `imoveis_vendedor` (filtrada por angariações).
+  * Regra Q2 — imóveis que o cliente vende ficam excluídos da lista
+    de comprador.
+  * Frontend público: tabs `Imóveis` / `Meus Imóveis`, card
+    `CardImovelVendedor` com sub-tabs `Resumo` / `Visitas`,
+    detalhe público aceita angariações (`e_angariacao` esconde as
+    `AcoesImovel`).
+  * Frontend CRM: selector `Comprador / Vendedor` no
+    `ClientesAssociados`, sync additive-only de
+    `e_comprador`/`e_vendedor`, `DialogRegistarVisita`,
+    `SecaoVisitas` no `ImovelDetalhe`.
+  * `agencia_nome` e `consultor_representante` **nunca** visíveis
+    ao vendedor. `notas_internas` idem.
+
+Concluído em rondas anteriores
 - Papéis do cliente (comprador / vendedor / ambos) — entregue com
   `Cliente.e_comprador` + `Cliente.e_vendedor` e CHECK
   `e_comprador OR e_vendedor`. Backfill: todos os clientes existentes
@@ -11,8 +41,6 @@ Concluído nesta ronda
   `qualificacoes_comprador` (1:1) e endpoints PUT/GET/DELETE em
   `/api/clientes/{id}/qualificacao-comprador`. Formulário em 4
   blocos no tab "Qualificação" do ClienteDetalhe.
-
-Concluído em rondas anteriores
 - Favoritos na aplicação pública — entregue como "Interesse" na
   feature de Interações cliente ↔ imóvel.
 - Pedido de visita na aplicação pública — entregue via POST
@@ -25,11 +53,12 @@ Concluído em rondas anteriores
 Próxima tarefa — a definir
 
 Escolher entre:
-- Portal do vendedor — fase 2 (ver bloco dedicado abaixo).
+- Estatísticas manuais de plataformas imobiliárias (ver Fase 3 abaixo).
 - Notificações (email/push) para novos pedidos de visita.
 - Filtros e pesquisa na aplicação pública.
 - Contagem de interesses/pedidos por imóvel no gestor de links
   (requer agregação no backend).
+- Testes de integração das visitas + estatísticas.
 
 ⸻
 
@@ -43,22 +72,27 @@ CRM e gestão de imóveis
 - Filtro por papel (comprador / vendedor) na listagem de clientes.
 - Badge de estado da qualificação na listagem de clientes
   (hoje só aparece no detalhe).
+- UI dedicada de angariações (lista / gestão centralizada). Hoje só
+  se vê o papel na secção "Clientes associados" do detalhe do
+  imóvel.
 
 Aplicação pública
 - Filtros e pesquisa na aplicação pública.
 - Dark mode na aplicação pública.
 - PWA (instalação no telemóvel).
+- Gráfico de visitas por período (últimos 7/30 dias) no card do
+  vendedor — hoje só há listas e médias.
 
 Clientes e consultores
 - Notificar o consultor quando o cliente abre o link.
 - Multi-consultor com partilha.
-- Ficha de qualificação de vendedor (fase 2 — após modelo de
-  angariação).
-- Histórico de qualificações (uma linha por reunião, em vez de upsert
-  1:1). Só se a prática mostrar que é necessário.
+- Ficha de qualificação de vendedor (após modelo de angariação
+  consolidado).
+- Histórico de qualificações (uma linha por reunião, em vez de
+  upsert 1:1). Só se a prática mostrar que é necessário.
 - Preencher `consultor_id` da ficha com o `Consultor` (e não o
-  `User`) — hoje guarda o `user_id`. Reavaliar na fase 2, quando
-  houver mais casos de uso para auditoria.
+  `User`) — hoje guarda o `user_id`. Reavaliar, quando houver mais
+  casos de uso para auditoria.
 
 Interações e notas
 - Notificações (email/push) para novos pedidos de visita.
@@ -69,68 +103,37 @@ Interações e notas
 - Backfill das notas antigas (imovel_versao_id IS NULL): apagar,
   reassociar ou deixar no bucket legacy.
 
-Portal do vendedor — fase 2
-Visão: o cliente vendedor vê no link público dele as estatísticas do
-imóvel que está a vender (visualizações, visitas, feedback de
-visitantes). O caso "cliente ambos" usa o mesmo link (o frontend
-público decide o que renderizar com base em `e_comprador` /
-`e_vendedor`).
+Portal do vendedor — fase 3 (follow-ups)
 
-Pré-requisitos
-- Associação vendedor↔imóvel (tabela pivot `angariacoes` ou FK
-  `cliente_vendedor_id` no imóvel canónico). Sem isto, o link do
-  vendedor não tem imóvel para mostrar.
-- Regra de workflow: o imóvel que o cliente está a vender NÃO entra
-  no link dele como comprador (já é prática, falta documentar/
-  validar no backend).
+Estatísticas manuais de plataformas
+- Objectivo: além das visitas, o vendedor quer ver o desempenho do
+  imóvel no Idealista, Imovirtual, etc. **Sem scraping** — o
+  consultor insere os números manualmente no CRM.
+- Tabela nova `estatisticas_plataforma` (versao_id, plataforma enum,
+  data, visualizacoes, contactos, ...).
+- Endpoints CRM para inserir/editar.
+- Extensão do endpoint público de estatísticas para incluir a
+  secção `plataformas` (o placeholder `plataformas: []` já existe
+  na resposta).
+- Frontend público: nova sub-tab no card do vendedor (`Plataformas`)
+  quando houver dados.
 
-Tabela nova — `VisitaImovel` (ficha de visitante)
-Preenchida no CRM depois de cada visita, pelo consultor. Não confundir
-com `InteracaoImovel` (essa é do comprador, via link).
+Histórico de angariações
+- Hoje `ImovelVersaoCliente.papel` não tem `data_inicio` /
+  `data_fim`. Se a prática mostrar necessidade, promover a tabela
+  pivot `angariacoes` com `data_inicio`, `data_fim`, `estado`.
+- Migração dos pares `papel='vendedor'` existentes para a nova
+  estrutura, preservando os pares `comprador`.
 
-Campos:
-- id, imovel_versao_id (FK)
-- data_visita (date)
-- visitante_nome (text)
-- visitante_origem (enum: agencia_externa | particular |
-  cliente_proprio | walk_in | outro) — a maioria é `agencia_externa`
-- agencia_nome (text, nullable — preenchido se `agencia_externa`)
-- visitante_contacto (text, nullable)
-- feedback_rating (smallint 1–5, nullable)
-- feedback_texto (text, nullable)
-- interesse_demonstrado (bool, nullable)
-- notas_internas (text, nullable) — NÃO visível ao vendedor
-- consultor_id (FK users), criado_em
+Mesmo par cliente↔versão com dois papéis
+- Hoje a PK composta `(imovel_versao_id, cliente_id)` impede.
+  Cenário raro (cliente compra imóvel que ele próprio vende).
+  Só promover `papel` a parte da PK se aparecer na prática.
 
-Endpoints
-- CRM:
-  * POST   /api/imoveis/{versao_id}/visitas
-  * GET    /api/imoveis/{versao_id}/visitas
-  * PATCH  /api/visitas/{id}
-  * DELETE /api/visitas/{id}
-- Público:
-  * GET /api/public/links/{token}/estatisticas — usa o mesmo token
-    do link. Agrega:
-      - visualizações (de `LinkAcesso`, já existente)
-      - visitas (de `VisitaImovel`)
-      - feedback médio + nº de feedbacks
-      - comparação com a média do consultor (opcional)
-    Filtra por `link.cliente_id` e pelos imóveis associados ao
-    cliente como vendedor.
-
-Frontend público
-- Seção condicional a `cliente.e_vendedor` no link (tabs "Os meus
-  imóveis" / "Estatísticas do meu imóvel" quando o cliente é ambos).
-- Gráfico simples de visualizações por período (últimos 7 / 30
-  dias).
-- Lista de visitas com feedback (sem `notas_internas`).
-
-Frontend CRM
-- Formulário de "Registar visita" no detalhe do imóvel.
-- Lista de visitas no detalhe do imóvel.
-
-Marketing e presença online
-- Landing page para o site principal.
+Frontend público (extensões)
+- Página de detalhe do imóvel angariado com botão "Ver estatísticas"
+  no fundo (hoje o detalhe mostra o aviso "ver no card da lista",
+  que é pouco natural).
 
 Qualidade e manutenção
 - Testes automatizados (backend).
@@ -140,6 +143,15 @@ Qualidade e manutenção
   (PUT/GET/DELETE, 409 em vendedor-puro, isolamento entre
   consultores). Adiado por decisão da equipa; a ficha foi validada
   manualmente em dev.
+- **Testes de integração para o portal do vendedor** (fase 2):
+  - Criação de visita (201) e bloqueio 400 sem angariação activa.
+  - Estatísticas públicas (num_visitas, ratings_medios,
+    compraria_sim/nao).
+  - Sync additive-only de `e_comprador` / `e_vendedor`.
+  - Regra Q2 (imóvel angariado não aparece na lista comprador).
+  - Exclusão de `agencia_nome` / `consultor_representante` /
+    `notas_internas` no payload público.
+  Adiado por decisão da equipa; validado manualmente em dev.
 
 Infraestrutura
 - Validar o funcionamento do filtro por labels do Watchtower. ✅
