@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import type { ImovelVersaoComDetalhes } from '@/types'
+import type { ImovelVersaoComDetalhes, PapelAssociacao } from '@/types'
 
 interface UpdateImovelPayload {
   titulo?: string | null
@@ -28,15 +28,27 @@ export function useUpdateImovel(versaoId: number) {
   })
 }
 
+interface AssociarClientePayload {
+  clienteId: number
+  papel: PapelAssociacao
+}
+
 export function useAssociarCliente(versaoId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (clienteId: number) => {
-      await api.post(`/imoveis/${versaoId}/clientes/${clienteId}`)
+    mutationFn: async ({ clienteId, papel }: AssociarClientePayload) => {
+      await api.post(`/imoveis/${versaoId}/clientes/${clienteId}`, null, {
+        params: { papel },
+      })
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['imovel', versaoId, 'clientes'] })
       qc.invalidateQueries({ queryKey: ['imoveis'] })
+      // Backend promove e_comprador / e_vendedor do cliente ao associar.
+      // Invalidar a chave ['cliente', id] apanha (por prefix match) o detalhe
+      // do cliente e também ['cliente', id, 'imoveis'].
+      qc.invalidateQueries({ queryKey: ['cliente', variables.clienteId] })
+      qc.invalidateQueries({ queryKey: ['clientes'] })
     },
   })
 }
@@ -47,9 +59,13 @@ export function useDesassociarCliente(versaoId: number) {
     mutationFn: async (clienteId: number) => {
       await api.delete(`/imoveis/${versaoId}/clientes/${clienteId}`)
     },
-    onSuccess: () => {
+    onSuccess: (_, clienteId) => {
       qc.invalidateQueries({ queryKey: ['imovel', versaoId, 'clientes'] })
       qc.invalidateQueries({ queryKey: ['imoveis'] })
+      // Desassociar NÃO despromove o cliente (additive-only no backend),
+      // mas o detalhe do cliente pode mostrar a lista de imóveis dele.
+      qc.invalidateQueries({ queryKey: ['cliente', clienteId] })
+      qc.invalidateQueries({ queryKey: ['clientes'] })
     },
   })
 }

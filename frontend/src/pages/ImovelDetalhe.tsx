@@ -23,11 +23,13 @@ import {
   Calendar,
   MessageCircle,
   StickyNote,
+  ClipboardList,
 } from 'lucide-react'
 import FormImovel from '@/components/imovel/FormImovel'
 import SnapshotCanonico from '@/components/imovel/SnapshotCanonico'
 import GaleriaFotos from '@/components/imovel/GaleriaFotos'
 import ClientesAssociados from '@/components/imovel/ClientesAssociados'
+import SecaoVisitas from '@/components/imovel/SecaoVisitas'
 import { notify } from '@/lib/toast'
 import { EstadoImovelSelect } from '@/components/imovel/EstadoImovelSelect'
 import { SecaoInteracoesImovel } from '@/components/imovel/SecaoInteracoesImovel'
@@ -239,6 +241,19 @@ export default function ImovelDetalhe() {
         </CardHeader>
         <CardContent>
           <SecaoNotasImovel versaoId={imovel.id} />
+        </CardContent>
+      </Card>
+
+      {/* Visitas — Card full-width abaixo das notas */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Visitas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SecaoVisitas versaoId={imovel.id} />
         </CardContent>
       </Card>
     </div>

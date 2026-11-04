@@ -123,20 +123,21 @@ export interface Cliente {
   telefone: string | null
   nif: string | null
   notas: string | null
-  // Papéis: pelo menos um é true (validado no backend)
   e_comprador: boolean
   e_vendedor: boolean
   criado_em: string
   atualizado_em: string
-  // Ficha de qualificação (só existe quando e_comprador=true e já preenchida)
   qualificacao: QualificacaoComprador | null
 }
+
+export type PapelAssociacao = 'comprador' | 'vendedor'
 
 export interface ClienteAssociado {
   id: number
   nome: string
   email: string | null
   telefone: string | null
+  papel: PapelAssociacao
 }
 
 export interface ImovelVersaoComDetalhes extends ImovelVersao {
@@ -167,12 +168,10 @@ export interface QualificacaoComprador {
   consultor_id: number
   estado: EstadoQualificacao
 
-  // Bloco 1 — Disponibilidade
   compra_sozinho: boolean | null
   disp_notas: string | null
   disp_alternativas: string | null
 
-  // Bloco 2 — Perfil / Motivação
   motivo_compra: string | null
   tempo_procura: string | null
   urgencia: UrgenciaComprador | null
@@ -180,10 +179,9 @@ export interface QualificacaoComprador {
   tem_imovel_venda: boolean | null
   precisa_vender_comprar: boolean | null
 
-  // Bloco 3 — Imóvel pretendido
   caracteristicas: string | null
   nao_prescinde: string | null
-  valor_maximo: string | null // Decimal serializado como string
+  valor_maximo: string | null
   zonas_pretendidas: string | null
   motivo_zonas: string | null
   quartos: number | null
@@ -200,13 +198,12 @@ export interface QualificacaoComprador {
   areas_especificas: string | null
   notas_extra: string | null
 
-  // Bloco 4 — Financeira
   compra_pp: boolean | null
   financiamento_100: boolean | null
   falou_banco: boolean | null
   banco: string | null
   capitais_proprios: boolean | null
-  capitais_proprios_valor: string | null // Decimal como string
+  capitais_proprios_valor: string | null
   efetivo: boolean | null
   fiadores: boolean | null
   reuniao_loja: boolean | null
@@ -215,7 +212,6 @@ export interface QualificacaoComprador {
   atualizado_em: string
 }
 
-/** Payload do PUT — sem os campos gerados pelo backend. */
 export type QualificacaoCompradorUpsert = Omit<
   QualificacaoComprador,
   'id' | 'cliente_id' | 'consultor_id' | 'criado_em' | 'atualizado_em'
@@ -500,3 +496,47 @@ export interface ConsultorAdminCredenciaisUpdate {
   email?: string
   new_password?: string
 }
+
+
+// ===========================================================================
+// Visitas a imóveis (fichas de visita — CRM)
+// ===========================================================================
+
+export type VisitanteOrigem =
+  | 'agencia_externa'
+  | 'particular'
+  | 'cliente_proprio'
+  | 'walk_in'
+  | 'outro'
+
+export interface VisitaImovel {
+  id: number
+  imovel_versao_id: number
+  data_visita: string
+  visitante_nome: string
+  visitante_contacto: string | null
+  visitante_email: string | null
+  consultor_representante: string | null
+  notas_internas: string | null
+  visitante_origem: VisitanteOrigem
+  agencia_nome: string | null
+  gostou: string | null
+  nao_gostou: string | null
+  observacoes: string | null
+  rating_areas: number
+  rating_acabamentos: number
+  rating_localizacao: number
+  rating_apresentacao: number
+  rating_preco: number
+  rating_global: number
+  compraria: boolean
+  criado_em: string
+  atualizado_em: string
+}
+
+export type VisitaImovelCreate = Omit<
+  VisitaImovel,
+  'id' | 'imovel_versao_id' | 'criado_em' | 'atualizado_em'
+>
+
+export type VisitaImovelUpdate = Partial<VisitaImovelCreate>
