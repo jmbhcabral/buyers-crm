@@ -1,10 +1,50 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import api from '../lib/api'
-import type { PublicImovelDetalhe } from '../types'
+import type {
+  CaracteristicaEspecifica,
+  PublicImovelDetalhe,
+} from '../types'
 import { Layout } from '../components/Layout'
 import { EstadoImovelBadge } from '../components/EstadoImovelBadge'
 import { AcoesImovel } from '../components/AcoesImovel'
+
+
+/**
+ * O backend devolve `caracteristicas_especificas` no formato da
+ * plataforma de origem:
+ *  - Idealista: `string[]` (lista plana)
+ *  - Supercasa: `{ grupo: string; itens: string[] }[]` (agrupada)
+ *
+ * Esta função normaliza ambos para JSX renderizável.
+ */
+function renderCaracteristicaEspecifica(
+  c: CaracteristicaEspecifica,
+  i: number,
+) {
+  if (typeof c === 'string') {
+    return (
+      <li key={i} className="text-sm text-gray-700 flex gap-2">
+        <span className="text-primary">•</span>
+        <span>{c}</span>
+      </li>
+    )
+  }
+
+  return (
+    <li key={i} className="text-sm text-gray-700">
+      <p className="font-medium text-gray-900">{c.grupo}</p>
+      <ul className="mt-1 ml-4 space-y-0.5">
+        {c.itens.map((it, j) => (
+          <li key={j} className="flex gap-2">
+            <span className="text-primary">•</span>
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </li>
+  )
+}
 
 
 export function DetalhePage() {
@@ -181,19 +221,17 @@ export function DetalhePage() {
           </div>
         )}
 
-        {data.caracteristicas_especificas && data.caracteristicas_especificas.length > 0 && (
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Detalhes</h2>
-            <ul className="space-y-1.5">
-              {data.caracteristicas_especificas.map((c, i) => (
-                <li key={i} className="text-sm text-gray-700 flex gap-2">
-                  <span className="text-primary">•</span>
-                  {c}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {data.caracteristicas_especificas &&
+          data.caracteristicas_especificas.length > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mt-4">
+              <h2 className="text-sm font-semibold text-gray-900 mb-3">Detalhes</h2>
+              <ul className="space-y-2">
+                {data.caracteristicas_especificas.map(
+                  renderCaracteristicaEspecifica,
+                )}
+              </ul>
+            </div>
+          )}
       </div>
 
       {mostrarAcoes && (
