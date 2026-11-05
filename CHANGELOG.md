@@ -1,5 +1,34 @@
 Buyers CRM — CHANGELOG
 
+2026-11-05 — Fix: detalhe público rebentava com características do Supercasa
+
+Bug: abrir o detalhe de um imóvel ingerido do Supercasa no frontend
+público lançava `Minified React error #31` ("Objects are not valid as
+a React child"). O payload trazia `caracteristicas_especificas` como
+`[{grupo, itens[]}]`, mas o `DetalhePage` assumia `string[]` (formato
+do Idealista).
+
+Frontend público
+- `types.ts`: novo `CaracteristicaEspecifica = string | { grupo:
+  string; itens: string[] }`; `caracteristicas_especificas` passa a
+  `CaracteristicaEspecifica[] | null`. `caracteristicas[].subtexto`
+  passa a opcional (o Supercasa não o envia).
+- `DetalhePage.tsx`: novo helper `renderCaracteristicaEspecifica`
+  que renderiza strings (formato Idealista) e grupos (formato
+  Supercasa) — título + sub-lista.
+
+Backend
+- **Nenhuma alteração.**
+
+Validação manual em dev (Vite 5174):
+- Detalhe do imóvel Supercasa (canónico id=13, versão id=15)
+  renderiza sem erro; secção "Detalhes" mostra os 6 grupos.
+
+Notas
+- O bug só apareceu depois de o detalhe público deixar de devolver
+  404 (correção anterior do mesmo dia): até lá o erro de render
+  nunca era alcançado.
+
 2026-11-05 — Ingestão multi-plataforma: suporte a Supercasa
 
 Generaliza o `/api/imoveis/ingest` para aceitar imóveis de várias
