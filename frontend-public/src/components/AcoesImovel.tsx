@@ -28,7 +28,12 @@ export function AcoesImovel({
 
   const temInteresse = resumo?.interesses.includes(imovelVersaoId) ?? false
   const numPedidos = resumo?.por_imovel[imovelVersaoId]?.pedidos ?? 0
-  const temNotasNovas = (resumo?.notas_nao_lidas ?? 0) > 0
+  // Badge "nova nota" por imóvel — não usar o total do cliente
+  // (`resumo.notas_nao_lidas`), que agrega todos os imóveis e faria
+  // aparecer o ponto em todos os cartões.
+  const notasNovasDesteImovel =
+    resumo?.por_imovel[imovelVersaoId]?.notas_nao_lidas ?? 0
+  const temNotasNovas = notasNovasDesteImovel > 0
 
   function handleInteresse() {
     if (indisponivel) return

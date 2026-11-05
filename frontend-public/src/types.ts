@@ -117,11 +117,23 @@ export interface Nota {
   criado_em: string
 }
 
+/**
+ * Agregado por imóvel. `notas_nao_lidas` é a contagem de notas do
+ * consultor não lidas pelo cliente **naquele imóvel** — é o que o
+ * badge "nova nota" deve usar (não o total `notas_nao_lidas` do
+ * cliente, que agrega todos os imóveis).
+ */
+export interface InteracoesPorImovel {
+  interesse: number
+  pedidos: number
+  notas_nao_lidas: number
+}
+
 export interface InteracoesResumo {
   interesses: number[]
   pedidos: Interacao[]
   notas_nao_lidas: number
-  por_imovel: Record<number, { interesse: number; pedidos: number }>
+  por_imovel: Record<number, InteracoesPorImovel>
 }
 
 

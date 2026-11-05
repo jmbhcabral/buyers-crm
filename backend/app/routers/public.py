@@ -594,13 +594,44 @@ def obter_interacoes_publicas(
         )
     ) or 0
 
+    # Notas não lidas por imóvel. O total em `notas_nao_lidas` continua
+    # a ser o agregado do cliente; o `por_imovel` passa a incluir a
+    # contagem por imóvel para o frontend poder pintar o badge só no
+    # imóvel certo (bug: aparecia em todos).
+    notas_nao_lidas_por_imovel: dict[int, int] = dict(
+        db.execute(
+            select(
+                NotaClienteImovel.imovel_versao_id,
+                func.count(),
+            )
+            .where(
+                NotaClienteImovel.cliente_id == link.cliente_id,
+                NotaClienteImovel.autor_tipo == "consultor",
+                NotaClienteImovel.lida_pelo_destinatario.is_(False),
+                NotaClienteImovel.imovel_versao_id.is_not(None),
+            )
+            .group_by(NotaClienteImovel.imovel_versao_id)
+        ).all()
+    )
+
     por_imovel: dict[int, dict[str, int]] = {}
     for i in interacoes:
-        d = por_imovel.setdefault(i.imovel_versao_id, {"interesse": 0, "pedidos": 0})
+        d = por_imovel.setdefault(
+            i.imovel_versao_id,
+            {"interesse": 0, "pedidos": 0, "notas_nao_lidas": 0},
+        )
         if i.tipo == "interesse":
             d["interesse"] = 1
         elif i.estado in ("pendente", "visto"):
             d["pedidos"] += 1
+
+    # Injectar as notas não lidas por imóvel no agregado.
+    for versao_id_, n_ in notas_nao_lidas_por_imovel.items():
+        d = por_imovel.setdefault(
+            versao_id_,
+            {"interesse": 0, "pedidos": 0, "notas_nao_lidas": 0},
+        )
+        d["notas_nao_lidas"] = int(n_)
 
     return InteracoesResumo(
         interesses=interesses,
