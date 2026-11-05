@@ -197,6 +197,7 @@ export function DetalhePage() {
                 .filter((c) => c.nome !== 'PRICE')
                 .map((c, i) => (
                   <div key={i} className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 mb-0.5">{c.nome}</p>
                     <p className="text-base font-bold text-primary">
                       {c.valor}
                       {c.subtexto && (
