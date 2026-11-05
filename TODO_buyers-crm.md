@@ -53,6 +53,20 @@ Concluído nesta ronda (2026-11-05)
   * Tabela `notas_cliente_imovel` limpa em produção nesta ronda
     (0 linhas à data do deploy). Backfill de notas legacy fica em
     TODO (ver "Interações e notas").
+- Fix: características e descrição do Supercasa no detalhe público
+  — entregue:
+  * `userscripts/buyers-crm-supercasa.user.js` (1.0.2):
+    `obterDescricao` lê o DOM (`#description p.text-base`) em vez
+    do resumo do JSON-LD; `extrairCaracteristicas` normaliza para
+    `{nome, valor, subtexto}`, traduz `MTK` → `m²` e remove
+    `acc.name` (era o título).
+  * `frontend-public/src/pages/DetalhePage.tsx`: mostra o `nome`
+    da característica (cinzento pequeno) acima do `valor` (grande).
+    Melhoria transversal (Idealista + Supercasa).
+  * Sem alteração de contrato no backend; sem migração.
+  * Validado em dev: canónico id=13 com descrição real e
+    características normalizadas; detalhe público renderiza
+    corretamente.
 
 Concluído em rondas anteriores (2026-11-04)
 - Fix: só o criador do cliente o pode editar ou apagar — entregue:
@@ -336,6 +350,15 @@ Qualidade e manutenção
     `criado_por_consultor_id`.
   Adiado por decisão da equipa; migração + fluxo validados
   manualmente em dev.
+- **Testes de regressão do detalhe público — características
+  normalizadas (2026-11-05):**
+  - Detalhe de imóvel Supercasa mostra `Área bruta: 111 m²` (não
+    `111 MTK`), `Quartos: 2`, etc., com rótulo visível.
+  - Detalhe de imóvel Idealista continua a renderizar as
+    características com rótulo (sem regressão).
+  - A descrição do Supercasa é o texto do anúncio (não o resumo
+    do JSON-LD).
+  Adiado por decisão da equipa; validado manualmente em dev.
 
 Infraestrutura
 - Validar o funcionamento do filtro por labels do Watchtower. ✅

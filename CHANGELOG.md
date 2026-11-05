@@ -1,5 +1,63 @@
 Buyers CRM — CHANGELOG
 
+2026-11-05 — Fix: características e descrição do Supercasa no detalhe público
+
+Dois bugs no detalhe público depois da ingestão do Supercasa:
+
+1. **Características "esquisitas"**: o bloco "Características
+   principais" mostrava `111 MTK`, `2`, `2`, `8`, `2009` e
+   `Apartamento T2 em Parque das Nações, Lisboa` sem rótulo. O
+   `acc.name` do JSON-LD estava a ser enviado como característica
+   redundante (é o título), a unidade `MTK` do schema.org não era
+   traduzida para `m²`, e o frontend só renderizava o `valor` (nunca
+   o `nome`).
+
+2. **Descrição errada**: o `Accommodation.description` do JSON-LD
+   do Supercasa é um resumo gerado (`"<tipo> <tipologia> Área bruta
+   N m², …"`), não o texto do anunciante. O userscript enviava esse
+   resumo, não o texto real (que vive em `#description p.text-base`
+   no DOM).
+
+Userscript (`buyers-crm-supercasa.user.js`, 1.0.1 → 1.0.2)
+- `obterDescricao(jsonLd)` lê `#description p.text-base` (DOM) e
+  cai para o JSON-LD só se o DOM não tiver o bloco.
+- `extrairCaracteristicas(jsonLd)` normaliza para o formato do
+  Idealista (`{nome, valor, subtexto}`):
+  * unidade `MTK`/`M2` → `m²` no `subtexto`;
+  * `acc.name` deixa de entrar como característica;
+  * ordem: Área bruta, Quartos, Casas de banho, Piso, Ano de
+    construção.
+
+Frontend público (`DetalhePage.tsx`)
+- O bloco "Características principais" passa a mostrar o `nome` de
+  cada característica (em cinzento pequeno) acima do `valor` (em
+  primário grande). Melhoria transversal — aplica-se ao Idealista
+  e ao Supercasa. Sem alterações de lógica; só um `<p>` adicional
+  por característica.
+
+Sem alteração de contrato no backend: o payload continua a
+espelhar a plataforma de origem. A normalização é feita no
+userscript (para o Supercasa) e a renderização no frontend (para
+todos).
+
+Validação manual em dev:
+- JSON copiado do userscript 1.0.2 no anúncio do Parque das Nações
+  traz `caracteristicas` com `{nome: "Área bruta", valor: "111",
+  subtexto: "m²"}` e sem `Nome`.
+- Reenvio do imóvel para o servidor → canónico id=13 atualiza
+  `descricao` (texto completo, não o resumo) e `caracteristicas`;
+  versão id=15 sincroniza sem conflitos.
+- Detalhe público mostra `Área bruta: 111 m²`, `Quartos: 2`, … com
+  rótulo; descrição real do anúncio (a começar em "Descubra este
+  magnífico apartamento…").
+- Detalhe de imóvel Idealista continua a renderizar as
+  características corretamente, agora com rótulo.
+
+Notas
+- O `@version` do userscript sobe para 1.0.2; o Tampermonkey
+  apanha a alteração no próximo reload da página do Supercasa.
+- Sem migração. Sem alteração ao modelo.
+
 2026-11-05 — Fix: badge de nota nova por imóvel + desaparece ao abrir o modal
 
 Dois bugs no frontend público, no seguimento do fix do detalhe do
