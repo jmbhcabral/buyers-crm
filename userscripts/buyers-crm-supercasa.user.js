@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Buyers CRM - Extrator Supercasa
 // @namespace    https://buyers-crm.local
-// @version      1.0.1
+// @version      1.0.2
 // @description  Envia dados de imóveis do Supercasa para o Buyers CRM.
 // @author       Tu
 // @match        https://supercasa.pt/venda-*/*
@@ -161,6 +161,47 @@
         return blocos;
     }
 
+    /**
+     * Características "principais" a partir do JSON-LD.
+     *
+     * Normalizadas para o formato do Idealista:
+     *   { nome, valor, subtexto }
+     *
+     * - A unidade `MTK` (metros quadrados) do schema.org é traduzida
+     *   para `m²` — o frontend público mostra o `valor` grande e o
+     *   `subtexto` pequeno ao lado.
+     * - `acc.name` NÃO entra como característica: é o título do
+     *   imóvel, já mostrado no topo do detalhe.
+     */
+    function extrairCaracteristicas(jsonLd) {
+        const acc = jsonLd?.acc;
+        const lista = [];
+
+        if (acc?.floorSize?.value != null) {
+            const unidade = (acc.floorSize.unitCode || '').toUpperCase();
+            const sufixo = (unidade === 'MTK' || unidade === 'M2') ? 'm²' : unidade;
+            lista.push({
+                nome: 'Área bruta',
+                valor: String(acc.floorSize.value),
+                subtexto: sufixo,
+            });
+        }
+        if (acc?.numberOfBedrooms != null) {
+            lista.push({ nome: 'Quartos', valor: String(acc.numberOfBedrooms), subtexto: null });
+        }
+        if (acc?.numberOfBathroomsTotal != null) {
+            lista.push({ nome: 'Casas de banho', valor: String(acc.numberOfBathroomsTotal), subtexto: null });
+        }
+        if (acc?.floorLevel) {
+            lista.push({ nome: 'Piso', valor: String(acc.floorLevel), subtexto: null });
+        }
+        if (acc?.yearBuilt) {
+            lista.push({ nome: 'Ano de construção', valor: String(acc.yearBuilt), subtexto: null });
+        }
+
+        return lista;
+    }
+
     /** Extrai o superClientID (id do anunciante) do DOM. */
     function obterSuperClientID() {
         // 1. Input hidden do formulário de contacto
@@ -303,26 +344,8 @@
             if (addr.addressCountry) localizacao.push(addr.addressCountry);
         }
 
-        // Características a partir do JSON-LD (tipologia, área, quartos, etc.)
-        const caracteristicas = [];
-        if (acc?.floorSize) {
-            caracteristicas.push({ nome: 'Área', valor: `${acc.floorSize.value} ${acc.floorSize.unitCode}` });
-        }
-        if (acc?.numberOfBedrooms != null) {
-            caracteristicas.push({ nome: 'Quartos', valor: String(acc.numberOfBedrooms) });
-        }
-        if (acc?.numberOfBathroomsTotal != null) {
-            caracteristicas.push({ nome: 'Casas de banho', valor: String(acc.numberOfBathroomsTotal) });
-        }
-        if (acc?.floorLevel) {
-            caracteristicas.push({ nome: 'Piso', valor: String(acc.floorLevel) });
-        }
-        if (acc?.yearBuilt) {
-            caracteristicas.push({ nome: 'Ano de construção', valor: String(acc.yearBuilt) });
-        }
-        if (acc?.name) {
-            caracteristicas.push({ nome: 'Nome', valor: acc.name });
-        }
+        // Características principais (normalizadas para o formato Idealista)
+        const caracteristicas = extrairCaracteristicas(jsonLd);
 
         // Preço: formatar como string com "€" (o backend guarda String)
         const precoNum = offer?.price;
