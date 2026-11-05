@@ -27,7 +27,6 @@ export function AcoesImovel({
   const visitaDesativada = estado !== 'disponivel'
 
   const temInteresse = resumo?.interesses.includes(imovelVersaoId) ?? false
-  const numPedidos = resumo?.por_imovel[imovelVersaoId]?.pedidos ?? 0
   // Badge "nova nota" por imóvel — não usar o total do cliente
   // (`resumo.notas_nao_lidas`), que agrega todos os imóveis e faria
   // aparecer o ponto em todos os cartões.
@@ -73,7 +72,7 @@ export function AcoesImovel({
           className="relative flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 transition"
         >
           <MessageCircle className="h-4 w-4" />
-          <span>Notas{numPedidos > 0 ? ` (${numPedidos})` : ''}</span>
+          <span>Notas</span>
           {temNotasNovas && (
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
           )}

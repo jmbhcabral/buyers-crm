@@ -264,6 +264,9 @@ export function useMarcarNotaLidaPublica(token: string) {
   const mutate = useCallback(
     async (notaId: number) => {
       await api.patch(`/public/links/${token}/notas/${notaId}/ler`)
+      // Actualizar o agregado (por_imovel[].notas_nao_lidas) para o
+      // badge do AcoesImovel desaparecer sem precisar de refresh.
+      await fetchResumo(token)
     },
     [token]
   )
