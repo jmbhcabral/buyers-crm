@@ -39,7 +39,7 @@ class ImovelCanonicoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    property_id: str
+    property_id: str | None = None
     titulo: str | None = None
     preco: str | None = None
     localizacao: list[Any] | None = None
@@ -139,7 +139,7 @@ class ImovelVersaoListItem(BaseModel):
     atualizado_em: datetime
     criado_em: datetime
 
-    property_id: str
+    property_id: str | None = None
     num_fotos: int = 0
     num_clientes: int = 0
     primeira_foto_id: int | None = None
