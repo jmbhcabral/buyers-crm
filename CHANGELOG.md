@@ -1,5 +1,71 @@
 Buyers CRM — CHANGELOG
 
+2026-11-05 — Fix: só o criador do cliente o pode editar ou apagar
+
+Bug: um membro da equipa podia alterar a visibilidade de um cliente de
+equipa (`equipa` → `pessoal`) e retirar o acesso aos restantes membros
+— incluindo ao criador. A regra anterior (`pode_gerir_cliente`) dava
+edição total a qualquer membro da equipa.
+
+Backend
+- `services/acesso.py` — novas funções:
+  * `e_criador_do_cliente(db, consultor, cliente)` — o criador é o
+    primeiro consultor em `cliente_consultor` (ordem de `criado_em`);
+    a associação é adicionada no mesmo flush da criação, pelo que
+    corresponde sempre a quem criou o cliente. Admin é tratado em
+    separado (`user.is_admin`).
+  * `pode_editar_cliente(db, user, consultor, cliente)` — admin OR
+    criador.
+- `routers/clientes.py`:
+  * `atualizar_cliente` e `apagar_cliente` aplicam
+    `pode_editar_cliente` depois de `pode_gerir_cliente`. Devolvem
+    **403** explícito quando o utilizador não é o criador nem admin.
+  * Novo helper `_serialize_cliente` calcula `posso_editar` com base
+    em `pode_editar_cliente`; usado por `obter_cliente`,
+    `criar_cliente` e `atualizar_cliente`.
+  * `listar_clientes` fica com `posso_editar=True` por omissão — não
+    é crítico na listagem (sem edição inline), o detalhe devolve o
+    valor real.
+- `schemas/cliente.py`: `ClienteRead.posso_editar: bool = True`
+  (calculado no router, não persiste).
+
+Frontend privado
+- `types/index.ts`: `Cliente.posso_editar: boolean`.
+- `hooks/use-clientes.ts`: `ClienteUpdatePayload` exclui
+  `posso_editar` (não é escrevível).
+- `components/cliente/FormCliente.tsx`:
+  * Quando `!cliente.posso_editar`, todos os campos ficam
+    desabilitados, o botão Guardar desaparece e mostra-se um aviso
+    "Só quem criou o cliente o pode editar."
+  * O `onError` propaga o `detail` do backend no toast (defesa para
+    o caso de 403 em corrida).
+  * Mantém-se `pode_gerir_cliente` para as operações derivadas
+    (associar imóveis, curar link, ver visitas/notas/interacções/
+    qualificação) — um colega continua a colaborar no cliente, só
+    não altera os dados base.
+
+Sem migração. Sem alteração de modelo. Sem alteração no frontend
+público.
+
+Decisão registada
+- **"Editar cliente" é do criador; "colaborar no cliente" é da
+  equipa.** A distinção entre `pode_editar_cliente` (admin/criador)
+  e `pode_gerir_cliente` (equipa) evita que um colega mude a
+  visibilidade e "expulse" os restantes. Fica em TODO avaliar uma
+  regra mais permissiva (ex.: colega corrige telefone mas não mexe
+  na visibilidade) se a prática mostrar necessidade.
+
+Notas
+- `e_criador_do_cliente` depende da ordem de
+  `cliente_consultor.criado_em`. Funciona porque a associação é
+  criada no mesmo flush do cliente e nunca é removida. Se um dia
+  houver remoção, promover a `clientes.criado_por_consultor_id`
+  (coluna explícita) — registado em TODO.
+- Sem testes automatizados nesta fase (mantém-se a decisão de adiar
+  testes de integração). Fluxo validado manualmente em dev: A
+  (criador) edita; B (colega) recebe 403 no PATCH/DELETE; admin
+  edita; B continua a ver tudo e a colaborar.
+
 2026-11-04 — Equipas multi-consultor
 
 Backend

@@ -203,7 +203,8 @@ Matriz de acesso (centralizada em `app/services/acesso.py`):
 
 | Operação | Regra |
 |---|---|
-| Gerir cliente | admin OR (pessoal E via `cliente_consultor`) OR (equipa E `consultor.equipa_id == cliente.equipa_id`) |
+| Ver/colaborar no cliente | admin OR (pessoal E via `cliente_consultor`) OR (equipa E `consultor.equipa_id == cliente.equipa_id`) |
+| Editar/apagar cliente (dados base) | admin OR criador (`pode_editar_cliente`; criador = primeiro `cliente_consultor`) |
 | Ver versão | admin OR dono OR (versão associada a cliente da minha equipa) |
 | Editar/apagar versão | admin OR dono |
 | Associar versão↔cliente | `pode_ver_versao` E `pode_gerir_cliente` |
@@ -216,6 +217,15 @@ Matriz de acesso (centralizada em `app/services/acesso.py`):
 
 Regras de negócio:
 
+- **"Editar cliente" é do criador; "colaborar" é da equipa.**
+  `pode_editar_cliente` (admin OR criador) governa PATCH/DELETE
+  do cliente. `pode_gerir_cliente` (equipa) governa tudo o resto
+  (ver detalhe, associar imóveis, curar link, ver visitas/notas/
+  interacções/qualificação). Isto evita que um colega mude a
+  visibilidade de `equipa` para `pessoal` e retire acesso aos
+  restantes membros. O criador é o primeiro consultor em
+  `cliente_consultor` (ordem de `criado_em`), adicionado no mesmo
+  flush da criação.
 - **Versão nasce pessoal.** As versões continuam do consultor que
   as criou. Colegas da equipa podem **ver** versões associadas a
   clientes da equipa, mas não editá-las.
@@ -350,6 +360,11 @@ Links públicos
   `PATCH /links/{id}/apresentacao`; tem de ser consultor activo e,
   se o cliente é de equipa, membro dessa equipa. Se `NULL` ou
   apontar para consultor apagado, cai para `consultor_id`.
+  - **`ClienteRead.posso_editar`** — calculado em `GET /clientes/{id}`,
+  `POST /clientes` e `PATCH /clientes/{id}` com base em
+  `pode_editar_cliente`. O frontend usa-o para desabilitar o
+  `FormCliente` quando o utilizador não é o criador. Na listagem
+  (`GET /clientes`) vem `True` por omissão (não há edição inline).
 - Unicidade do link:
   - Cliente **pessoal** (`cliente.equipa_id IS NULL`): um link por
     par `(cliente_id, consultor_id)` — unique constraint existente.
@@ -482,9 +497,12 @@ Existem também endpoints para:
 * API Keys.
 * Clientes:
   * GET    /clientes            — próprios + da equipa
+  * GET    /clientes/{id}       — devolve `posso_editar` calculado
   * POST   /clientes            — aceita `equipa_id` opcional (null =
     pessoal; id = cliente de equipa; validado: só a própria equipa)
-  * PATCH  /clientes/{id}       — aceita `equipa_id` (idem)
+  * PATCH  /clientes/{id}       — só o criador ou admin (**403** caso
+    contrário); aceita `equipa_id` (idem)
+  * DELETE /clientes/{id}       — só o criador ou admin (**403**)
 * Imóveis:
   * GET    /imoveis?incluir_equipa=true — inclui versões de colegas
     associadas a clientes da equipa

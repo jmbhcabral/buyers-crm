@@ -3,6 +3,18 @@ Buyers CRM — TODO
 Última atualização: 2026-11-04
 
 Concluído nesta ronda (2026-11-04)
+- Fix: só o criador do cliente o pode editar ou apagar — entregue:
+  * `services/acesso.py`: `e_criador_do_cliente` (primeiro
+    `cliente_consultor` por `criado_em`) e `pode_editar_cliente`
+    (admin OR criador).
+  * `schemas/cliente.py`: `ClienteRead.posso_editar`.
+  * `clientes.py`: 403 em `PATCH`/`DELETE` quando não é criador nem
+    admin; `posso_editar` calculado em `obter_cliente`,
+    `criar_cliente` e `atualizar_cliente`.
+  * `FormCliente.tsx`: campos desabilitados, aviso visível e botão
+    Guardar escondido quando `!posso_editar`; toast com `detail`
+    do backend.
+  * Sem migração. Sem alteração de modelo.
 - Equipas multi-consultor — entregue:
   * Tabela `equipas` + `consultores.equipa_id` (1 consultor em no
     máximo 1 equipa) + `clientes.equipa_id` (NULL = pessoal,
@@ -132,6 +144,21 @@ Clientes e consultores
     mascaradas em `_build_detalhe` para não-donos.
   * UI de "consultores da equipa" no detalhe da equipa (hoje
     admin-only no diálogo de gestão).
+      * **Regra de edição do cliente — alternativa B.** Hoje é
+    tudo-ou-nada: só o criador edita qualquer campo. Se a prática
+    mostrar necessidade, permitir a membros da equipa corrigir
+    campos menos sensíveis (telefone, email, notas) mantendo a
+    restrição apenas em `equipa_id` e nos papéis. É ajustar
+    `pode_editar_cliente` para permitir campos não-sensíveis e
+    deixar a validação da visibilidade num check à parte no router.
+  * **`criado_por_consultor_id` no `Cliente`.** `e_criador_do_cliente`
+    depende implicitamente de `cliente_consultor` (ordem de
+    `criado_em`). Funciona porque a associação é criada no mesmo
+    flush e nunca é removida. Se um dia houver remoção de
+    consultores do cliente, promover a coluna explícita
+    `clientes.criado_por_consultor_id` (nullable FK →
+    `consultores.id`) e migrar com base no primeiro
+    `cliente_consultor`.
 - Ficha de qualificação de vendedor (após modelo de angariação
   consolidado).
 - Histórico de qualificações (uma linha por reunião, em vez de
