@@ -41,14 +41,36 @@ def _consultor_associado_ao_cliente_pessoal(
     ) is not None
 
 
+def e_criador_do_cliente(
+    db: Session, consultor: Consultor | None, cliente: Cliente
+) -> bool:
+    """True se o consultor é o criador do cliente.
+
+    O criador é o primeiro consultor associado em `cliente_consultor`
+    (ordem de `criado_em`). Como `criar_cliente` adiciona a associação
+    no mesmo flush da criação, o primeiro registo é sempre o criador.
+    Admin é tratado em separado no router (via `user.is_admin`).
+    """
+    if consultor is None:
+        return False
+    criador_id = db.scalar(
+        select(ClienteConsultor.consultor_id)
+        .where(ClienteConsultor.cliente_id == cliente.id)
+        .order_by(ClienteConsultor.criado_em)
+        .limit(1)
+    )
+    return criador_id == consultor.id
+
+
 def pode_gerir_cliente(
     db: Session,
     user: User,
     consultor: Consultor | None,
     cliente: Cliente,
 ) -> bool:
-    """Quem pode listar/editar/apagar o cliente e tudo o que lhe está
-    associado (links, visitas, notas, interacções, qualificação).
+    """Quem pode **ver e colaborar** no cliente e no que lhe está
+    associado (listar, ver detalhe, associar imóveis, ver visitas,
+    notas, interacções, qualificação, gerir link).
 
     - Admin: qualquer cliente.
     - Cliente pessoal: consultor associado via `cliente_consultor`.
@@ -61,6 +83,22 @@ def pode_gerir_cliente(
     if cliente.equipa_id is None:
         return _consultor_associado_ao_cliente_pessoal(db, cliente.id, consultor.id)
     return consultor.equipa_id == cliente.equipa_id
+
+
+def pode_editar_cliente(
+    db: Session, user: User, consultor: Consultor | None, cliente: Cliente
+) -> bool:
+    """Quem pode **alterar os dados base** do cliente e apagá-lo.
+
+    Só o criador ou admin. Um colega da equipa vê o cliente e colabora
+    nas operações derivadas (`pode_gerir_cliente`), mas não altera
+    nome/email/telefone/papéis/visibilidade. Isto evita que um colega
+    mude a visibilidade de "equipa" para "pessoal" e retire acesso aos
+    restantes membros — incluindo ao criador.
+    """
+    if user.is_admin:
+        return True
+    return e_criador_do_cliente(db, consultor, cliente)
 
 
 # ---------------------------------------------------------------------------

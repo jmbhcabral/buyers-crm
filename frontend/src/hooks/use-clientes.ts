@@ -59,7 +59,7 @@ export function useCriarCliente() {
 
 /** Campos escrevíveis de Cliente (exclui gerados pelo backend e relationship). */
 type ClienteUpdatePayload = Partial<
-  Omit<Cliente, 'id' | 'qualificacao' | 'criado_em' | 'atualizado_em'>
+  Omit<Cliente, 'id' | 'qualificacao' | 'criado_em' | 'atualizado_em' | 'posso_editar'>
 >
 
 export function useAtualizarCliente(clienteId: number) {

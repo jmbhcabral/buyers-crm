@@ -65,9 +65,6 @@ class ClienteUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _papeis_nao_ambos_falsos(self) -> "ClienteUpdate":
-        # Só apanha o caso de o payload enviar ambos explicitamente a false.
-        # O caso "PATCH parcial sobre cliente já vendedor=false" é validado
-        # no router, que conhece o estado atual na BD.
         if self.e_comprador is False and self.e_vendedor is False:
             raise ValueError(
                 "O cliente tem de ser comprador, vendedor, ou ambos."
@@ -82,6 +79,12 @@ class ClienteRead(ClienteBase):
     criado_em: datetime
     atualizado_em: datetime
     qualificacao: QualificacaoCompradorRead | None = None
+
+    # Calculado pelo router com `pode_editar_cliente` (só o criador ou
+    # admin podem alterar). O `listar_clientes` deixa ficar `True` por
+    # omissão — não é crítico na listagem; o detalhe devolve o valor
+    # real.
+    posso_editar: bool = True
 
 
 class ClienteComConsultores(ClienteRead):

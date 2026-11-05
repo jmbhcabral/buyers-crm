@@ -11,7 +11,7 @@ from app.models import Cliente, ClienteConsultor, Consultor, User
 from app.schemas.cliente import ClienteCreate, ClienteRead, ClienteUpdate
 from app.models import ImovelCanonico, ImovelVersao, ImovelVersaoCliente
 from app.schemas.imovel import ImovelVersaoListItem
-from app.services.acesso import pode_gerir_cliente
+from app.services.acesso import pode_editar_cliente, pode_gerir_cliente
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -28,7 +28,8 @@ def _obter_cliente_com_acesso(
 
     Regras em `services.acesso.pode_gerir_cliente`:
     - Admin: qualquer cliente.
-    - Cliente pessoal (equipa_id IS NULL): consultor associado via `cliente_consultor`.
+    - Cliente pessoal (equipa_id IS NULL): consultor associado via
+      `cliente_consultor`.
     - Cliente de equipa (equipa_id NOT NULL): qualquer membro da equipa.
     """
     cliente = db.get(
@@ -51,8 +52,6 @@ def _validar_equipa_atribuivel(
     """Só se pode atribuir o cliente à própria equipa (ou NULL, se admin)."""
     if equipa_id is None:
         if not user.is_admin and consultor is not None:
-            # Permitido: despromover para pessoal (só o consultor da associação
-            # original perde, os outros também perdem — coerente com "pessoal").
             pass
         return
     if user.is_admin:
@@ -62,6 +61,21 @@ def _validar_equipa_atribuivel(
             status.HTTP_403_FORBIDDEN,
             "Só pode atribuir clientes à equipa a que pertence.",
         )
+
+
+def _serialize_cliente(
+    db: Session,
+    user: User,
+    consultor: Consultor | None,
+    cliente: Cliente,
+) -> ClienteRead:
+    """`ClienteRead` com `posso_editar` calculado."""
+    base = ClienteRead.model_validate(cliente)
+    return base.model_copy(
+        update={
+            "posso_editar": pode_editar_cliente(db, user, consultor, cliente),
+        }
+    )
 
 
 @router.get("", response_model=list[ClienteRead])
@@ -108,8 +122,9 @@ def obter_cliente(
     db: DbSession,
     user: CurrentUser,
     consultor: ConsultorOpcional,
-) -> Cliente:
-    return _obter_cliente_com_acesso(db, cliente_id, user, consultor)
+) -> ClienteRead:
+    cliente = _obter_cliente_com_acesso(db, cliente_id, user, consultor)
+    return _serialize_cliente(db, user, consultor, cliente)
 
 
 @router.post("", response_model=ClienteRead, status_code=status.HTTP_201_CREATED)
@@ -118,7 +133,7 @@ def criar_cliente(
     db: DbSession,
     user: CurrentUser,
     consultor: ConsultorOpcional,
-) -> Cliente:
+) -> ClienteRead:
     """Cria um cliente.
 
     - `equipa_id=None` → cliente pessoal (dono via `cliente_consultor`).
@@ -135,7 +150,8 @@ def criar_cliente(
 
     db.commit()
     db.refresh(cliente)
-    return cliente
+    # Quem cria é sempre o criador → pode editar.
+    return _serialize_cliente(db, user, consultor, cliente)
 
 
 @router.patch("/{cliente_id}", response_model=ClienteRead)
@@ -145,8 +161,15 @@ def atualizar_cliente(
     db: DbSession,
     user: CurrentUser,
     consultor: ConsultorOpcional,
-) -> Cliente:
+) -> ClienteRead:
     cliente = _obter_cliente_com_acesso(db, cliente_id, user, consultor)
+
+    # Só o criador (ou admin) altera os dados base do cliente.
+    if not pode_editar_cliente(db, user, consultor, cliente):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Só quem criou o cliente o pode editar.",
+        )
 
     data = payload.model_dump(exclude_unset=True)
 
@@ -168,7 +191,7 @@ def atualizar_cliente(
 
     db.commit()
     db.refresh(cliente)
-    return cliente
+    return _serialize_cliente(db, user, consultor, cliente)
 
 
 @router.delete("/{cliente_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -179,6 +202,13 @@ def apagar_cliente(
     consultor: ConsultorOpcional,
 ) -> None:
     cliente = _obter_cliente_com_acesso(db, cliente_id, user, consultor)
+
+    if not pode_editar_cliente(db, user, consultor, cliente):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Só quem criou o cliente o pode apagar.",
+        )
+
     db.delete(cliente)
     db.commit()
 

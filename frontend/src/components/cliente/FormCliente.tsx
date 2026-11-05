@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Save, Users2 } from 'lucide-react'
+import { Loader2, Save, Users2, Lock } from 'lucide-react'
 import { useAtualizarCliente } from '@/hooks/use-clientes'
 import { useEquipasDisponiveis } from '@/hooks/use-equipas'
 import type { Cliente } from '@/types'
@@ -38,10 +38,10 @@ export default function FormCliente({ cliente }: Props) {
 
   const papeisValidos = eComprador || eVendedor
 
-  // O utilizador só pode escolher:
-  //  - null (pessoal) — sempre
-  //  - admin: qualquer equipa da lista
-  //  - não-admin com equipa: só a sua
+  // Só o criador (ou admin) pode editar. Vem do backend em `posso_editar`.
+  const podeEditar = cliente.posso_editar
+  const disabled = update.isPending || !podeEditar
+
   const equipasOpcoes: { id: number; label: string }[] = isAdmin
     ? equipas.map((e) => ({ id: e.id, label: e.nome }))
     : minhaEquipaId
@@ -56,7 +56,7 @@ export default function FormCliente({ cliente }: Props) {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!papeisValidos) return
+    if (!papeisValidos || !podeEditar) return
 
     update.mutate(
       {
@@ -71,7 +71,11 @@ export default function FormCliente({ cliente }: Props) {
       },
       {
         onSuccess: () => notify.sucesso('Cliente atualizado.'),
-        onError: () => notify.erro('Erro ao atualizar cliente.'),
+        onError: (err: any) => {
+          const detail =
+            err?.response?.data?.detail ?? 'Erro ao atualizar cliente.'
+          notify.erro(detail)
+        },
       }
     )
   }
@@ -82,6 +86,16 @@ export default function FormCliente({ cliente }: Props) {
         <CardTitle className="text-base">Dados do cliente</CardTitle>
       </CardHeader>
       <CardContent>
+        {!podeEditar && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              Só quem criou o cliente o pode editar. Podes consultar todos os
+              dados, mas não alterá-los.
+            </span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="nome">Nome</Label>
@@ -90,6 +104,7 @@ export default function FormCliente({ cliente }: Props) {
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               required
+              disabled={disabled}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -100,6 +115,7 @@ export default function FormCliente({ cliente }: Props) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={disabled}
               />
             </div>
             <div className="space-y-2">
@@ -108,6 +124,7 @@ export default function FormCliente({ cliente }: Props) {
                 id="telefone"
                 value={telefone}
                 onChange={(e) => setTelefone(e.target.value)}
+                disabled={disabled}
               />
             </div>
           </div>
@@ -117,6 +134,7 @@ export default function FormCliente({ cliente }: Props) {
               id="nif"
               value={nif}
               onChange={(e) => setNif(e.target.value)}
+              disabled={disabled}
             />
           </div>
 
@@ -127,6 +145,7 @@ export default function FormCliente({ cliente }: Props) {
                 <Checkbox
                   checked={eComprador}
                   onCheckedChange={(v) => setEComprador(v === true)}
+                  disabled={disabled}
                 />
                 Comprador
               </label>
@@ -134,6 +153,7 @@ export default function FormCliente({ cliente }: Props) {
                 <Checkbox
                   checked={eVendedor}
                   onCheckedChange={(v) => setEVendedor(v === true)}
+                  disabled={disabled}
                 />
                 Vendedor
               </label>
@@ -151,7 +171,11 @@ export default function FormCliente({ cliente }: Props) {
                 <Users2 className="h-4 w-4" />
                 Visibilidade
               </Label>
-              <Select value={equipaAtualValor} onValueChange={handleEquipaChange}>
+              <Select
+                value={equipaAtualValor}
+                onValueChange={handleEquipaChange}
+                disabled={disabled}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -182,19 +206,22 @@ export default function FormCliente({ cliente }: Props) {
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
               rows={4}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={disabled}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
-          <div className="flex justify-end">
-            <Button type="submit" disabled={update.isPending || !papeisValidos}>
-              {update.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Guardar
-            </Button>
-          </div>
+          {podeEditar && (
+            <div className="flex justify-end">
+              <Button type="submit" disabled={update.isPending || !papeisValidos}>
+                {update.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Guardar
+              </Button>
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>

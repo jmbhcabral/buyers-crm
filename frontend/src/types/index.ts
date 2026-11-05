@@ -167,6 +167,9 @@ export interface Cliente {
   criado_em: string
   atualizado_em: string
   qualificacao: QualificacaoComprador | null
+  // Calculado pelo backend: só o criador (ou admin) podem alterar.
+  // O `ClienteDetalhe` usa-o para desabilitar o formulário.
+  posso_editar: boolean
 }
 
 export type PapelAssociacao = 'comprador' | 'vendedor'
