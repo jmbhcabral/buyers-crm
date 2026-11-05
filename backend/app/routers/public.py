@@ -126,11 +126,14 @@ def _resolver_imovel_no_link(
     não pertence a este link nem por LinkImovel nem por angariação.
 
     É a base dos endpoints que aceitam ambos (detalhe, fotos).
+
+    NOTA: NÃO validar `versao.consultor_id == link.consultor_id`. A
+    associação (`LinkImovel` ou `ImovelVersaoCliente.papel='vendedor'`) é
+    a única fonte de verdade — é o que permite que um colega de equipa
+    cure o link com versões de outro consultor.
     """
     versao = db.get(ImovelVersao, versao_id)
     if versao is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
-    if versao.consultor_id != link.consultor_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
 
     # 1) está no link curado do comprador?
@@ -283,7 +286,6 @@ def obter_link_publico(
             .where(
                 ImovelVersaoCliente.cliente_id == link.cliente_id,
                 ImovelVersaoCliente.papel == "vendedor",
-                ImovelVersao.consultor_id == link.consultor_id,
             )
             .order_by(ImovelVersao.atualizado_em.desc())
         ).all()
@@ -395,7 +397,7 @@ def obter_estatisticas_vendedor(
 
     # Validação: só angariações do próprio cliente
     versao = db.get(ImovelVersao, versao_id)
-    if versao is None or versao.consultor_id != link.consultor_id:
+    if versao is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Imóvel não encontrado")
     ang = db.scalar(
         select(ImovelVersaoCliente).where(
@@ -579,11 +581,16 @@ def obter_interacoes_publicas(
         and i.estado in ("pendente", "visto")
     ]
 
+    # Notas não lidas visíveis ao cliente: só notas ancoradas a um imóvel
+    # (imovel_versao_id IS NOT NULL). As notas legacy (NULL) vivem num
+    # bucket read-only no CRM e não podem ser abertas/marcadas pelo
+    # cliente — não devem contribuir para o badge de "novas".
     notas_nao_lidas = db.scalar(
         select(func.count()).select_from(NotaClienteImovel).where(
             NotaClienteImovel.cliente_id == link.cliente_id,
             NotaClienteImovel.autor_tipo == "consultor",
             NotaClienteImovel.lida_pelo_destinatario.is_(False),
+            NotaClienteImovel.imovel_versao_id.is_not(None),
         )
     ) or 0
 
