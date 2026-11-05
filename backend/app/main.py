@@ -46,6 +46,8 @@ else:
         allow_origins=[
             "https://www.idealista.pt",
             "https://idealista.pt",
+            "https://supercasa.pt",
+            "https://www.supercasa.pt",
             "https://crm.chanilaicastro.pt",
             "https://imoveis.chanilaicastro.pt",
         ],

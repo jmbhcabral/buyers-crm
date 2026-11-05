@@ -1,5 +1,15 @@
-"""Serviço de download e armazenamento de fotos do Idealista."""
+"""Serviço de download e armazenamento de fotos dos imóveis.
 
+Suporta múltiplas plataformas:
+- Idealista: nome do ficheiro = `{idealista_id}.{ext}` (id numérico estável).
+- Outras (Supercasa, etc.): nome do ficheiro = hash curto de `url_original`
+  (estável mesmo que a ordem das fotos mude entre captações).
+
+A pasta é por canónico: `{property_id}/` para o Idealista, ou
+`canonico_{id}/` quando `property_id` é NULL.
+"""
+
+import hashlib
 import logging
 from pathlib import Path
 
@@ -31,17 +41,25 @@ def _extensao_do_url(url: str) -> str:
     return ext if ext in EXTENSOES_PERMITIDAS else ".jpg"
 
 
-def _pasta_do_imovel(property_id: str) -> Path:
+def _pasta_do_imovel(nome: str) -> Path:
     """Devolve (e cria) a pasta onde as fotos do imóvel vivem."""
-    pasta = Path(settings.storage_dir) / property_id
+    pasta = Path(settings.storage_dir) / nome
     pasta.mkdir(parents=True, exist_ok=True)
     return pasta
 
 
 def _nome_ficheiro(foto: Foto, url: str) -> str:
-    """Nome do ficheiro no disco: {idealista_id}.{ext} (ou {ordem}.{ext})."""
+    """Nome do ficheiro no disco.
+
+    Idealista: `{idealista_id}.{ext}` (estável — o id não muda).
+    Outras plataformas: hash curto de `url_original` — estável mesmo
+    que a `ordem` mude entre captações.
+    """
     ext = _extensao_do_url(url)
-    return f"{foto.idealista_id or foto.ordem}{ext}"
+    if foto.idealista_id is not None:
+        return f"{foto.idealista_id}{ext}"
+    chave = foto.url_original or foto.url_webp or url
+    return f"{hashlib.sha1(chave.encode()).hexdigest()[:12]}{ext}"
 
 
 def descarregar_fotos_do_canonico(canonico_id: int) -> None:
@@ -69,11 +87,13 @@ def descarregar_fotos_do_canonico(canonico_id: int) -> None:
         if not fotos:
             return
 
-        pasta = _pasta_do_imovel(canonico.property_id)
+        # Pasta por canónico: property_id (Idealista) ou canonico_{id}.
+        nome_pasta = canonico.property_id or f"canonico_{canonico.id}"
+        pasta = _pasta_do_imovel(nome_pasta)
         logger.info(
             "[fotos] A descarregar %d fotos do imóvel %s",
             len(fotos),
-            canonico.property_id,
+            nome_pasta,
         )
 
         alterados = False
@@ -106,7 +126,7 @@ def descarregar_fotos_do_canonico(canonico_id: int) -> None:
 
         if alterados:
             db.commit()
-            logger.info("[fotos] %d fotos do imóvel %s prontas", len(fotos), canonico.property_id)
+            logger.info("[fotos] %d fotos do imóvel %s prontas", len(fotos), nome_pasta)
 
     except Exception as e:
         logger.exception("[fotos] Erro inesperado: %s", e)

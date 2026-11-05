@@ -1,4 +1,4 @@
-"""Imóvel canónico (snapshot do Idealista) + histórico de captações + fotos."""
+"""Imóvel canónico (snapshot multi-plataforma) + histórico de captações + fotos."""
 
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -11,19 +11,30 @@ from app.database import Base
 from app.models.base import PKMixin, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.imovel_origem import ImovelOrigem
     from app.models.imovel_versao import ImovelVersao
 
 
 class ImovelCanonico(Base, PKMixin, TimestampMixin):
-    """Snapshot canónico do imóvel, vindo do Idealista.
+    """Snapshot canónico do imóvel, partilhado por todos os consultores.
 
-    Este registo é PARTILHADO por todos os consultores.
-    Ninguém o edita diretamente — só se atualiza via ingest.
+    Pode ter várias origens (`ImovelOrigem`) — uma por plataforma
+    (Idealista, Imovirtual, Supercasa, Properstar). O `property_id`
+    mantém-se como atalho para o Idealista (retrocompatibilidade com
+    o userscript antigo e com queries existentes). Nas origens que
+    não são o Idealista, `property_id` fica `NULL`.
+
+    Ninguém edita este registo diretamente — só se atualiza via ingest.
     """
 
     __tablename__ = "imoveis_canonicos"
 
-    property_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    # Atalho para o Idealista. NULL nas origens que não o Idealista.
+    # O índice único (`ix_imoveis_canonicos_property_id`) aceita
+    # múltiplos NULL em PostgreSQL.
+    property_id: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True, index=True
+    )
 
     # Campos principais (extraídos no ingest)
     titulo: Mapped[str | None] = mapped_column(String(512))
@@ -46,7 +57,8 @@ class ImovelCanonico(Base, PKMixin, TimestampMixin):
     contagens: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     telefone: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
-    # Guarda o JSON original inteiro (backup/auditoria)
+    # Guarda o JSON original inteiro da ÚLTIMA captação (qualquer
+    # plataforma). O raw_json por plataforma vive em ImovelOrigem.
     raw_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     extraido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -66,13 +78,17 @@ class ImovelCanonico(Base, PKMixin, TimestampMixin):
         back_populates="canonico",
         cascade="all, delete-orphan",
     )
+    origens: Mapped[list["ImovelOrigem"]] = relationship(
+        back_populates="imovel_canonico",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<ImovelCanonico id={self.id} property_id={self.property_id!r}>"
 
 
 class ImovelCanonicoHistorico(Base, PKMixin):
-    """Histórico de cada captação do Idealista para um canónico."""
+    """Histórico de cada captação para um canónico."""
 
     __tablename__ = "imoveis_canonicos_historico"
 
@@ -94,8 +110,12 @@ class ImovelCanonicoHistorico(Base, PKMixin):
 class Foto(Base, PKMixin, TimestampMixin):
     """Fotos do imóvel canónico (ficheiros descarregados pelo backend).
 
-    Suporta soft delete: quando o Idealista remove uma foto, marcamos
+    Suporta soft delete: quando a plataforma remove uma foto, marcamos
     `ativa=False` em vez de apagar, para preservar histórico.
+
+    `idealista_id` continua a ser o `multimediaId` do Idealista. Nas
+    outras plataformas é `NULL` e a deduplicação faz-se por
+    `url_original`.
     """
 
     __tablename__ = "fotos"
@@ -107,7 +127,6 @@ class Foto(Base, PKMixin, TimestampMixin):
         index=True,
     )
 
-    # ID da foto no Idealista (multimediaId) — chave natural para dedup
     idealista_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
     ordem: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -119,8 +138,9 @@ class Foto(Base, PKMixin, TimestampMixin):
     tag: Mapped[str | None] = mapped_column(String(64))
     titulo: Mapped[str | None] = mapped_column(String(255))
 
-    # Soft delete
-    ativa: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False, index=True)
+    ativa: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False, index=True
+    )
 
     imovel_canonico: Mapped["ImovelCanonico"] = relationship(back_populates="fotos")
 
