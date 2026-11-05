@@ -1,5 +1,80 @@
 Buyers CRM — CHANGELOG
 
+2026-11-05 — Fix: badge de nota nova por imóvel + desaparece ao abrir o modal
+
+Dois bugs no frontend público, no seguimento do fix do detalhe do
+Supercasa. Ambos só no `AcoesImovel` / `use-interacoes`; backend
+já devolvia o necessário (o `por_imovel` do `InteracoesResumo`).
+
+Bugs
+- O badge "nova nota" (ponto vermelho) aparecia em **todos** os
+  cards de imóvel do link, porque `AcoesImovel` usava
+  `resumo.notas_nao_lidas` (total do cliente) em vez do valor
+  por imóvel.
+- O botão "Notas (N)" mostrava `N = por_imovel[id].pedidos` (nº de
+  pedidos de visita/info daquele imóvel), não o nº de notas. Rótulo
+  e valor mediam coisas diferentes — confundia o cliente.
+- O badge não desaparecia ao abrir o modal de notas: o `PATCH
+  .../notas/{id}/ler` atualizava a BD, mas o `resumoCache` em
+  memória (por token) ficava com o valor antigo. Só um refresh da
+  página forçava novo `fetchResumo`.
+
+Backend
+- `routers/public.py` — `obter_interacoes_publicas` passa a
+  calcular `notas_nao_lidas` **por imóvel** (`group_by
+  NotaClienteImovel.imovel_versao_id`, com os mesmos filtros do
+  total: `autor_tipo='consultor'`, `lida_pelo_destinatario=false`,
+  `imovel_versao_id IS NOT NULL`) e a injectá-lo em
+  `por_imovel[id].notas_nao_lidas`. O total `notas_nao_lidas`
+  mantém-se para compat.
+- `schemas/interacao.py` — sem alteração. `por_imovel:
+  dict[int, dict[str, int]]` já aceita a nova chave.
+
+Frontend público
+- `types.ts`: novo `InteracoesPorImovel` (`interesse`, `pedidos`,
+  `notas_nao_lidas`); `InteracoesResumo.por_imovel` passa a
+  `Record<number, InteracoesPorImovel>`.
+- `components/AcoesImovel.tsx`:
+  * badge "nova nota" lê `por_imovel[imovelVersaoId].notas_nao_lidas`
+    (por imóvel) em vez de `resumo.notas_nao_lidas` (total);
+  * removido o `(N)` do botão "Notas" — o número vinha de
+    `por_imovel[id].pedidos` e não pertencia ao rótulo "Notas". O
+    botão fica só "Notas" + ponto vermelho.
+- `hooks/use-interacoes.ts`:
+  `useMarcarNotaLidaPublica` passa a chamar `fetchResumo(token)`
+  após o `PATCH .../ler`. O badge desaparece imediatamente ao abrir
+  o modal, sem refresh. Os `mutate` paralelos (uma nota por
+  `forEach` no `ModalNotas`) partilham a mesma promise via
+  `entry.inflight`, logo não disparam N GETs.
+
+Frontend privado
+- **Nenhuma alteração.**
+
+Sem migração. Sem alteração de modelo.
+
+Validação manual em dev:
+- Link com 3 imóveis; nota do consultor só no imóvel 2 →
+  `GET /interacoes` devolve `por_imovel["2"].notas_nao_lidas=1`,
+  os outros 0. Só o card 2 mostra o ponto; botão "Notas" sem
+  `(N)`.
+- Abrir o modal no card 2 → `PATCH .../ler` → `fetchResumo`
+  atualiza `por_imovel["2"].notas_nao_lidas=0` → ponto desaparece
+  sem refresh.
+- Nota do cliente (via modal) não sobe `notas_nao_lidas` (só conta
+  notas do consultor) → nenhum ponto aparece.
+
+Notas
+- A tabela `notas_cliente_imovel` foi limpa nesta ronda (0 linhas
+  em produção à data do deploy). O backfill de notas legacy
+  (`imovel_versao_id IS NULL`) continua em TODO; como ficou vazia,
+  o bucket read-only do CRM fica sem efeito prático.
+- Sem testes automatizados (mantém-se a decisão de adiar testes de
+  integração). Fluxo validado manualmente em dev + produção.
+- `pedidos` continua a existir em `por_imovel` (o backend devolve-o
+  e pode ser útil noutro sítio); simplesmente deixou de ser
+  mostrado ao lado de "Notas". Se um dia se quiser mostrar ao
+  cliente, o sítio natural é o botão "Visita" (registado em TODO).
+
 2026-11-05 — Fix: detalhe público rebentava com características do Supercasa
 
 Bug: abrir o detalhe de um imóvel ingerido do Supercasa no frontend

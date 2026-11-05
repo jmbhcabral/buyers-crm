@@ -21,6 +21,38 @@ Concluído nesta ronda (2026-11-05)
     `getphone`).
   * Validado end-to-end em dev e produção (canónico id=13,
     33 fotos, versão criada para o consultor).
+- Fix: detalhe público rebentava com características do Supercasa
+  (React error #31) — entregue:
+  * `types.ts`: `CaracteristicaEspecifica = string | { grupo:
+    string; itens: string[] }`; `caracteristicas_especificas`
+    passa a essa união. `caracteristicas[].subtexto` passa a
+    opcional (Supercasa não envia).
+  * `DetalhePage.tsx`: helper `renderCaracteristicaEspecifica`
+    trata os dois formatos (li simples ou grupo + sub-lista).
+  * Sem alteração de contrato no backend: o payload continua a
+    espelhar a plataforma de origem.
+  * Detalhe do imóvel Supercasa (canónico id=13, versão id=15)
+    renderiza sem erro; "Detalhes" mostra os 6 grupos.
+- Fix: badge de nota nova por imóvel + desaparece ao abrir o modal
+  — entregue:
+  * `public.py` — `obter_interacoes_publicas` calcula
+    `notas_nao_lidas` por imóvel (`group_by
+    NotaClienteImovel.imovel_versao_id`) e injecta-o em
+    `por_imovel[id].notas_nao_lidas`. Total `notas_nao_lidas`
+    mantém-se para compat.
+  * `interacao.py` — sem alteração (`dict[str, int]` aceita a nova
+    chave).
+  * `types.ts` — novo `InteracoesPorImovel`; `por_imovel` passa a
+    `Record<number, InteracoesPorImovel>`.
+  * `AcoesImovel.tsx` — badge lê `por_imovel[imovelVersaoId]
+    .notas_nao_lidas` (por imóvel), não o total; removido o `(N)`
+    do botão "Notas" (vinha de `pedidos`, confundia).
+  * `use-interacoes.ts` — `useMarcarNotaLidaPublica` chama
+    `fetchResumo(token)` após `PATCH .../ler`; badge desaparece
+    sem refresh.
+  * Tabela `notas_cliente_imovel` limpa em produção nesta ronda
+    (0 linhas à data do deploy). Backfill de notas legacy fica em
+    TODO (ver "Interações e notas").
 
 Concluído em rondas anteriores (2026-11-04)
 - Fix: só o criador do cliente o pode editar ou apagar — entregue:
@@ -122,6 +154,9 @@ Escolher entre:
 - Contagem de interesses/pedidos por imóvel no gestor de links
   (requer agregação no backend).
 - Testes de integração das visitas + estatísticas + equipas.
+- Testes de regressão do badge de notas e do detalhe público
+  com características multi-plataforma (ver "Qualidade e
+  manutenção").
 
 ⸻
 
@@ -197,8 +232,16 @@ Interações e notas
 - Rate limiting nas rotas públicas de notas/pedidos.
 - Avaliar mover estado_imovel para o canónico e sincronizar por
   versão (decisão atual: vive na versão).
-- Backfill das notas antigas (imovel_versao_id IS NULL): apagar,
-  reassociar ou deixar no bucket legacy.
+- **Backfill das notas antigas (`imovel_versao_id IS NULL`):**
+  a tabela `notas_cliente_imovel` foi limpa em 2026-11-05 (0
+  linhas). Se reaparecerem registos legacy (importações antigas,
+  restores), decidir entre apagar, reassociar ou manter o bucket
+  read-only do CRM.
+- **Mostrar nº de pedidos ao lado do botão "Visita"** no
+  `AcoesImovel` público. Hoje `por_imovel[id].pedidos` vem no
+  payload do `/interacoes` mas não é mostrado ao cliente (foi
+  removido do botão "Notas" em 2026-11-05 porque media outra
+  coisa). Decidir se faz sentido antes de implementar.
 
 Portal do vendedor — fase 3 (follow-ups)
 
@@ -231,11 +274,40 @@ Frontend público (extensões)
 - Página de detalhe do imóvel angariado com botão "Ver estatísticas"
   no fundo (hoje o detalhe mostra o aviso "ver no card da lista",
   que é pouco natural).
+- **Generalizar `renderCaracteristicaEspecifica` a outras
+  plataformas.** Hoje trata dois formatos: `string[]` (Idealista)
+  e `{grupo, itens[]}[]` (Supercasa). Se o Imovirtual ou a
+  Properstar trouxerem outro formato, a união
+  `CaracteristicaEspecifica` tem de ser estendida (e o
+  `DetalhePage` também). O backend continua a espelhar o formato
+  de origem — não normaliza.
+- **Detalhe público: esconder telefone do anúncio quando vier
+  como objeto.** No Supercasa, `telefone` vem como `{erro, fonte,
+  numero, telefones, temTelemovel}` (não é string). O
+  `DetalhePage` hoje não mostra o telefone do anúncio (só o do
+  consultor), por isso não rebenta — mas se um dia mostrar, tem
+  de tratar os dois formatos.
 
 Qualidade e manutenção
 - Testes automatizados (backend).
 - Testes de integração para os endpoints de interações e notas.
 - Testes do fluxo público (token → interações → notas).
+- **Testes de regressão do badge de notas (2026-11-05):**
+  - `GET /interacoes` devolve `por_imovel[id].notas_nao_lidas`
+    com o valor certo (só notas do consultor não lidas, só com
+    `imovel_versao_id IS NOT NULL`).
+  - `PATCH .../ler` + `fetchResumo` no frontend → badge
+    desaparece sem refresh.
+  - Criar nota do cliente não sobe `notas_nao_lidas`.
+  - Criar nota num imóvel não pinta o badge nos outros.
+  Adiado por decisão da equipa; validado manualmente em dev.
+- **Testes de regressão do detalhe público multi-plataforma
+  (2026-11-05):**
+  - Detalhe de imóvel Supercasa renderiza sem `React error #31`
+    (características agrupadas).
+  - Detalhe de imóvel Idealista continua a renderizar
+    características planas (sem regressão).
+  Adiado por decisão da equipa; validado manualmente em dev.
 - Testes de integração para a ficha de qualificação
   (PUT/GET/DELETE, 409 em vendedor-puro, isolamento entre
   consultores). Adiado por decisão da equipa; a ficha foi validada
