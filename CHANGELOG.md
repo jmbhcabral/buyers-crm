@@ -1,5 +1,102 @@
 Buyers CRM — CHANGELOG
 
+2026-11-05 — Ingestão multi-plataforma: suporte a Supercasa
+
+Generaliza o `/api/imoveis/ingest` para aceitar imóveis de várias
+plataformas. O payload do Idealista mantém-se retrocompatível
+(`fonte` ausente → assume `idealista`; `propertyId` continua a ser
+usado como `id_externo`). O primeiro userscript novo é o do
+Supercasa.
+
+Backend
+- Nova tabela `imoveis_origem` (migração `h2i3j4k5l6m7`), 1:N com
+  `imoveis_canonicos`. UNIQUE `(fonte, id_externo)`, CHECK em
+  `fonte` (`idealista` | `imovirtual` | `supercasa` | `properstar`),
+  `ON DELETE CASCADE`. Backfill: cada canónico existente ganhou uma
+  origem `idealista` a partir de `property_id` (9 linhas em dev;
+  13 em produção à data do deploy, incluindo as captadas depois).
+- `imoveis_canonicos.property_id` passa a NULLABLE. O índice único
+  `ix_imoveis_canonicos_property_id` mantém-se — PostgreSQL aceita
+  múltiplos NULL em índices únicos.
+- `schemas/ingest.py`: novos `fonte` (default `idealista`) e
+  `id_externo`; `property_id` e `FotoIngest.id` passam a opcionais;
+  novo `FotoIngest.url_externa`; `model_validator` garante
+  `property_id` no Idealista e `id_externo` nas outras.
+  `IngestResult` ganha `fonte` e `id_externo`.
+- `services/ingest.py`: lookup do canónico por
+  `(fonte, id_externo)` via `ImovelOrigem`, com fallback para
+  `property_id` quando a origem é o Idealista. `raw_json` do
+  canónico = última captação de qualquer plataforma; `raw_json` da
+  origem = última daquela plataforma. Merge campo a campo nas
+  versões inalterado. Fotos: dedup por `idealista_id` (Idealista)
+  ou `url_original` (outras), via chave `(tipo, valor)`.
+- `services/fotos.py`: pasta por canónico (`property_id` ou
+  `canonico_{id}`) e nome do ficheiro por `idealista_id` (Idealista)
+  ou hash SHA-1 curto de `url_original` (outras) — estável mesmo
+  que a ordem das fotos mude.
+- `main.py`: CORS passa a permitir `https://supercasa.pt` e
+  `https://www.supercasa.pt` no bloco de produção.
+
+Userscripts
+- Novo `userscripts/buyers-crm-supercasa.user.js`:
+  * Extração principal por JSON-LD (`RealEstateListing` + `Offer` +
+    `Accommodation` + `RealEstateAgent`), com fallback de DOM para
+    a ref do anunciante.
+  * Telefone via `POST /contact/getphone` (form-urlencoded,
+    `superCasaID`, `superClientID` lido do DOM,
+    `__RequestVerificationToken` da página).
+  * `fonte: "supercasa"`, `idExterno` do URL (`/i(\d+)$/`),
+    `propertyId` omitido.
+  * Bloco `supercasa` no payload (JSON-LD cru + `superClientID`) —
+    guardado no `raw_json` da origem (aceite por `extra="allow"`).
+  * Painel e menu Tampermonkey idênticos ao do Idealista, com
+    histórico local separado
+    (`buyers_crm_historico_supercasa`).
+
+Frontend privado / público
+- **Nenhuma alteração.** Os endpoints existentes mantêm-se; só o
+  schema de entrada do `/ingest` ficou mais permissivo.
+
+Validação manual em dev e produção:
+- Migração `h2i3j4k5l6m7` aplicada em dev e produção; backfill
+  correcto (9 origens `idealista` em dev; 13 em produção).
+- Payload do Supercasa copiado e validado (33 fotos, telefone
+  `215557128`, características, JSON-LD completo).
+- Preflight `OPTIONS` devolve
+  `access-control-allow-origin: https://supercasa.pt`.
+- Ingestão end-to-end em produção confirmada:
+  * `imoveis_origem`: 1 linha `supercasa | 2342533`.
+  * `imoveis_canonicos`: id=13, `property_id=NULL`, título
+    "Apartamento T2 em Parque das Nações, Lisboa", preço
+    "715 000,00 €", anunciante "Century 21 - Polo Central II - Filial".
+  * `fotos`: 33 linhas, todas com `caminho_local` preenchido;
+    ficheiros em `storage/fotos/canonico_13/` com nomes hash
+    SHA-1 (tamanhos típicos ~50–80 KB).
+  * `imoveis_versoes`: id=13, `consultor_id=1`, criada pelo ingest.
+
+Decisões registadas
+- **Opção B (origem como fonte de verdade dos campos específicos)**:
+  os campos genéricos vivem no canónico; os `ad_*` do Idealista
+  continuam a preencher-se (retrocompat), mas nas outras plataformas
+  ficam `NULL` e o `raw_json` da origem preserva tudo.
+- **`property_id` nullable em vez de sintético**: preserva a
+  semântica ("id do Idealista") em vez de inventar
+  `"supercasa:2342533"`.
+- **Fotos sem `idealista_id`**: nome do ficheiro por hash de
+  `url_original`, idempotente mesmo que a ordem mude.
+- **CORS explícito por origem** (não `*`): mantém
+  `allow_credentials=False`; o userscript usa `X-API-Key`, não
+  cookies.
+
+Notas
+- Sem testes automatizados nesta fase (mantém-se a decisão de adiar
+  testes de integração). Migração, backfill, ingestão e descarga de
+  fotos validados manualmente em dev + produção.
+- Imovirtual e Properstar ficam para próximas rondas (mesma
+  estrutura de origem).
+- `userscript/buyers-crm.user.js` (Idealista) fica intacto; a nova
+  pasta é `userscripts/`.
+
 2026-11-05 — Fix: só o criador do cliente o pode editar ou apagar
 
 Bug: um membro da equipa podia alterar a visibilidade de um cliente de

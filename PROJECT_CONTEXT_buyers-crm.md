@@ -1,6 +1,6 @@
 Buyers CRM — Project Context
 
-Última actualização: 2026-11-04
+Última actualização: 2026-11-05
 
 1. Descrição do projecto
 
@@ -10,7 +10,8 @@ O objectivo é centralizar a captação, gestão e apresentação de imóveis a 
 
 Funcionalidades principais:
 
-* Captação de imóveis do Idealista através de um userscript Tampermonkey.
+* Captação de imóveis do Idealista, Supercasa (e brevemente
+  Imovirtual, Properstar) através de userscripts Tampermonkey.
 * Gestão centralizada dos imóveis.
 * Versões editáveis dos imóveis por consultor.
 * Gestão de clientes e compradores.
@@ -85,16 +86,19 @@ Frontend público
 Captação de imóveis
 * JavaScript.
 * Tampermonkey.
-* Ficheiro principal: userscript/buyers-crm.user.js.
+* Userscripts: userscript/buyers-crm.user.js (Idealista, legado),
+  userscripts/buyers-crm-supercasa.user.js (Supercasa).
+* Fonte de cada imóvel: tabela `imoveis_origem` (1:N com
+  `imoveis_canonicos`), com UNIQUE `(fonte, id_externo)`.
 
 3. Arquitectura funcional
 
 O fluxo principal de captação é:
 
-Idealista
+Plataformas: Idealista / Supercasa / (Imovirtual) / (Properstar)
     |
     v
-Tampermonkey Userscript
+Tampermonkey Userscript (1 por plataforma)
     |
     v
 Backend FastAPI
@@ -150,6 +154,7 @@ Tabelas documentadas:
 * cliente_consultor
 * imoveis_canonicos
 * imoveis_canonicos_historico
+* imoveis_origem
 * fotos
 * imoveis_versoes
 * imoveis_versoes_clientes
@@ -247,6 +252,32 @@ Regras de negócio:
   cliente (membros da equipa antiga perdem acesso; novos ganham).
   `consultor_apresentacao_id` mantém-se — se apontar para consultor
   da equipa antiga, tem de ser alterado explicitamente.
+
+Origens multi-plataforma
+- `ImovelOrigem` — tabela `imoveis_origem` (id, imovel_canonico_id
+  FK ON DELETE CASCADE, fonte, id_externo, url, raw_json,
+  extraido_em, criado_em, atualizado_em). UNIQUE `(fonte,
+  id_externo)`, CHECK em `fonte`.
+- `fonte` — `idealista` | `imovirtual` | `supercasa` |
+  `properstar`. CHECK na BD (migração `h2i3j4k5l6m7`).
+- `id_externo` — id do imóvel na plataforma. No Idealista é o
+  `propertyId` do userscript (guardado como string). Nas outras,
+  o id do URL.
+- `imoveis_canonicos.property_id` é agora NULLABLE. Mantém-se como
+  atalho para o Idealista; nas origens que não o Idealista fica
+  `NULL`. O índice único aceita múltiplos `NULL` em PostgreSQL.
+- `raw_json` do canónico = última captação de qualquer plataforma;
+  `raw_json` de cada origem = última captação daquela plataforma.
+  Auditoria por plataforma sem partir o dedup do canónico.
+- O lookup do canónico é por `(fonte, id_externo)` via
+  `ImovelOrigem`, com fallback para `property_id` quando a origem
+  é o Idealista (retrocompatibilidade com o userscript antigo).
+- Fotos: `Foto.idealista_id` continua a ser o `multimediaId` do
+  Idealista; nas outras plataformas é `NULL` e a deduplicação
+  faz-se por `url_original`. Pasta no disco: `{property_id}/`
+  (Idealista) ou `canonico_{id}/` (outras). Nome do ficheiro:
+  `{idealista_id}.{ext}` ou hash SHA-1 curto de `url_original`
+  (12 chars).
 
 Papéis do cliente e qualificação do comprador
 - `Cliente.e_comprador` e `Cliente.e_vendedor` (booleanos NOT NULL,
@@ -506,7 +537,12 @@ Existem também endpoints para:
 * Imóveis:
   * GET    /imoveis?incluir_equipa=true — inclui versões de colegas
     associadas a clientes da equipa
-* Ingestão de imóveis.
+  * Ingestão multi-plataforma (via X-API-Key):
+    * POST /imoveis/ingest — payload com `fonte` (default
+      `idealista`), `idExterno`, `propertyId` (obrigatório só no
+      Idealista), `fotos[]` com `id` ou `urlExterna`. Devolve `acao`,
+      `fonte`, `id_externo`, `imovel_canonico_id`,
+      `imovel_versao_id`, contadores de fotos e versões.
 * Fotografias.
 * Geração de PDFs.
 * Dashboard (inclui /dashboard/interacoes-pendentes; agrega
@@ -797,7 +833,8 @@ buyers-crm/
 ├── backend/           — API FastAPI + Alembic + scripts
 ├── frontend/          — CRM privado (React + Vite)
 ├── frontend-public/   — Páginas públicas (React + Vite)
-├── userscript/        — Userscript Tampermonkey
+├── userscript/        — Userscript Tampermonkey (Idealista, legado)
+├── userscripts/       — Userscripts multi-plataforma (Supercasa)
 ├── help commands/     — Notas de apoio ao desenvolvimento
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
@@ -809,8 +846,8 @@ buyers-crm/
 ├── TODO_buyers-crm.md
 └── CHANGELOG.md
 
-A árvore detalhada (260 ficheiros, 42 diretórios à data de
-2026-11-04) está em PROJECT_STRUCTURE.txt. Actualizar esse
+A árvore detalhada (263 ficheiros, 43 diretórios à data de
+2026-11-05) está em PROJECT_STRUCTURE.txt. Actualizar esse
 ficheiro quando a estrutura mudar de forma significativa —
 idealmente na mesma alteração que introduz o novo ficheiro/pasta.
 

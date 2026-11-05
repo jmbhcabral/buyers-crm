@@ -27,7 +27,8 @@
 │   │       ├── e6f7a8b9c0d1_add_unique_vendedor_per_versao.py
 │   │       ├── f3a1b2c4d5e6_add_estado_imovel_and_interacoes.py
 │   │       ├── f7a8b9c0d1e2_create_visitas_imovel.py
-│   │       └── g1h2i3j4k5l6_create_equipas.py
+│   │       ├── g1h2i3j4k5l6_create_equipas.py
+│   │       └── h2i3j4k5l6m7_add_imoveis_origem.py
 │   ├── alembic.ini
 │   ├── app
 │   │   ├── __init__.py
@@ -45,6 +46,7 @@
 │   │   │   ├── consultor.py
 │   │   │   ├── equipa.py
 │   │   │   ├── imovel_canonico.py
+│   │   │   ├── imovel_origem.py
 │   │   │   ├── imovel_versao.py
 │   │   │   ├── interacao.py
 │   │   │   ├── link_cliente.py
@@ -298,7 +300,9 @@
 ├── pnpm-lock.yaml
 ├── postcss.config.js
 ├── tailwind.config.js
-└── userscript
-    └── buyers-crm.user.js
+├── userscript
+│   └── buyers-crm.user.js
+└── userscripts
+    └── buyers-crm-supercasa.user.js
 
-42 directories, 260 files
+43 directories, 263 files

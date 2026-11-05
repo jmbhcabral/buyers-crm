@@ -1,8 +1,28 @@
 Buyers CRM — TODO
 
-Última atualização: 2026-11-04
+Última atualização: 2026-11-05
 
-Concluído nesta ronda (2026-11-04)
+Concluído nesta ronda (2026-11-05)
+- Ingestão multi-plataforma (Supercasa) — entregue:
+  * Tabela `imoveis_origem` (1:N com `imoveis_canonicos`),
+    UNIQUE `(fonte, id_externo)`, CHECK em `fonte`. Migração
+    `h2i3j4k5l6m7` com backfill do Idealista.
+  * `imoveis_canonicos.property_id` nullable (índice único
+    mantém-se; PostgreSQL aceita múltiplos NULL).
+  * `schemas/ingest.py` com `fonte`/`id_externo`; `property_id`
+    e `FotoIngest.id` opcionais; `model_validator` condicional.
+  * `services/ingest.py` com lookup por origem (fallback
+    `property_id` para Idealista); `raw_json` por origem e por
+    canónico.
+  * `services/fotos.py` com pasta por canónico e nome por hash
+    quando `idealista_id IS NULL`.
+  * `main.py` com CORS para `supercasa.pt`.
+  * Novo `userscripts/buyers-crm-supercasa.user.js` (JSON-LD +
+    `getphone`).
+  * Validado end-to-end em dev e produção (canónico id=13,
+    33 fotos, versão criada para o consultor).
+
+Concluído em rondas anteriores (2026-11-04)
 - Fix: só o criador do cliente o pode editar ou apagar — entregue:
   * `services/acesso.py`: `e_criador_do_cliente` (primeiro
     `cliente_consultor` por `criado_em`) e `pode_editar_cliente`
@@ -45,7 +65,6 @@ Concluído nesta ronda (2026-11-04)
     `LinkCliente` (só para clientes de equipa).
   * Frontend público: sem alterações visuais — consome
     `consultor_apresentacao` do payload.
-
 - Portal do vendedor — entregue:
   * `ImoveisVersoesClientes.papel` (`comprador` | `vendedor`),
     com índice único parcial por imóvel quando `papel='vendedor'`.
@@ -96,6 +115,7 @@ Concluído em rondas anteriores
 Próxima tarefa — a definir
 
 Escolher entre:
+- Userscript Imovirtual (próxima plataforma).
 - Notificações (email/push) para novos pedidos de visita.
 - Filtros e pesquisa na aplicação pública.
 - Estatísticas manuais de plataformas imobiliárias (ver Fase 3).
@@ -106,6 +126,15 @@ Escolher entre:
 ⸻
 
 Funcionalidades e melhorias pendentes
+
+Captação multi-plataforma
+- Userscript Imovirtual (mesma estrutura de origem).
+- Userscript Properstar (atenção: o Imovirtual pode exportar para
+  a Properstar — dedupe por `id_externo` não chega, é preciso
+  cruzar `referenciaAnunciante` ou `url`).
+- Testes de integração do `/ingest` multi-plataforma (payload
+  Idealista vs Supercasa; 422 quando faltam `propertyId` ou
+  `idExterno`; dedupe por `(fonte, id_externo)`).
 
 CRM e gestão de imóveis
 - Exportar CSV de imóveis e clientes.
@@ -144,28 +173,23 @@ Clientes e consultores
     mascaradas em `_build_detalhe` para não-donos.
   * UI de "consultores da equipa" no detalhe da equipa (hoje
     admin-only no diálogo de gestão).
-      * **Regra de edição do cliente — alternativa B.** Hoje é
+  * **Regra de edição do cliente — alternativa B.** Hoje é
     tudo-ou-nada: só o criador edita qualquer campo. Se a prática
     mostrar necessidade, permitir a membros da equipa corrigir
     campos menos sensíveis (telefone, email, notas) mantendo a
-    restrição apenas em `equipa_id` e nos papéis. É ajustar
-    `pode_editar_cliente` para permitir campos não-sensíveis e
-    deixar a validação da visibilidade num check à parte no router.
+    restrição apenas em `equipa_id` e nos papéis.
   * **`criado_por_consultor_id` no `Cliente`.** `e_criador_do_cliente`
     depende implicitamente de `cliente_consultor` (ordem de
-    `criado_em`). Funciona porque a associação é criada no mesmo
-    flush e nunca é removida. Se um dia houver remoção de
-    consultores do cliente, promover a coluna explícita
+    `criado_em`). Se um dia houver remoção de consultores do
+    cliente, promover a coluna explícita
     `clientes.criado_por_consultor_id` (nullable FK →
-    `consultores.id`) e migrar com base no primeiro
-    `cliente_consultor`.
+    `consultores.id`).
 - Ficha de qualificação de vendedor (após modelo de angariação
   consolidado).
 - Histórico de qualificações (uma linha por reunião, em vez de
   upsert 1:1). Só se a prática mostrar que é necessário.
 - Preencher `consultor_id` da ficha com o `Consultor` (e não o
-  `User`) — hoje guarda o `user_id`. Reavaliar, quando houver mais
-  casos de uso para auditoria.
+  `User`) — hoje guarda o `user_id`.
 
 Interações e notas
 - Notificações (email/push) para novos pedidos de visita.
