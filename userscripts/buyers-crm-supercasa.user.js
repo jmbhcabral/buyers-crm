@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Buyers CRM - Extrator Supercasa
 // @namespace    https://buyers-crm.local
-// @version      1.0.0
+// @version      1.0.1
 // @description  Envia dados de imóveis do Supercasa para o Buyers CRM.
 // @author       Tu
 // @match        https://supercasa.pt/venda-*/*
@@ -124,6 +124,26 @@
         const txt = el.textContent.trim();
         const m = txt.match(/^Ref:\s*(?:SuperCasa\s+)?(.+)$/i);
         return m ? m[1].trim() : txt;
+    }
+
+    /**
+     * Descrição real do imóvel (DOM).
+     *
+     * O JSON-LD do Supercasa mete no `Accommodation.description` um
+     * resumo gerado ("<tipo> <tipologia> Área bruta N m², ..."), não
+     * o texto do anunciante. O texto completo vive em
+     * `#description p.text-base` no DOM (o botão "Ler mais" só
+     * esconde visualmente; o innerText devolve tudo).
+     *
+     * Fallback para o JSON-LD se o DOM não tiver o bloco.
+     */
+    function obterDescricao(jsonLd) {
+        const el = document.querySelector('#description p.text-base, .detail__description-text p');
+        if (el) {
+            const txt = (el.innerText || el.textContent || '').trim();
+            if (txt) return txt;
+        }
+        return jsonLd?.acc?.description || null;
     }
 
     /** Extrai as características específicas dos blocos h3 + ul. */
@@ -327,7 +347,7 @@
             titulo: acc?.name || listing?.name || document.title,
             preco: preco,
             localizacao: localizacao.length ? localizacao : null,
-            descricao: acc?.description || null,
+            descricao: obterDescricao(jsonLd),
             url: window.location.href,
             anunciante: agent?.name || null,
             referenciaAnunciante: obterReferenciaAnunciante(),
