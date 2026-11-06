@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Buyers CRM - Extrator de Imóveis
 // @namespace    https://buyers-crm.local
-// @version      2.0.0
+// @version      2.0.1
 // @description  Envia dados de imóveis do Idealista para o Buyers CRM.
 // @author       Tu
 // @match        https://www.idealista.pt/imovel/*
@@ -27,6 +27,70 @@
     const COR_SUCESSO = '#28a745';
     const COR_AVISO = '#ffc107';
     const COR_ERRO = '#dc3545';
+
+    // ============================================
+    // CARACTERÍSTICAS DO IDEALISTA
+    // ============================================
+    // O adDetail.headerFeatures do Idealista não tem rótulo legível —
+    // só o código em `featureName`. Mapeamos os códigos conhecidos
+    // para PT. Se aparecer um código novo, cai para o próprio código
+    // (não parte o ingest, mas mostra o código no frontend — vale a
+    // pena acrescentar ao mapa quando aparecer).
+    const ROTULOS_CARACTERISTICAS = {
+        CONSTRUCTED_AREA: 'Área bruta',
+        USEFUL_AREA: 'Área útil',
+        ROOM_NUMBER: 'Tipologia',
+        BATHROOM_NUMBER: 'Casas de banho',
+        FLOOR_NUMBER: 'Piso',
+        PARKING_INCLUDED: 'Estacionamento',
+        LIFT: 'Elevador',
+        GARDEN: 'Jardim',
+        POOL: 'Piscina',
+        TERRACE: 'Terraço',
+        BALCONY: 'Varanda',
+        ENERGY_CERTIFICATE: 'Certificado energético',
+        // PRICE é excluído do payload (não é característica, é o preço).
+    };
+
+    /**
+     * Limpa o `subText` do Idealista para o formato do frontend
+     * público (`valor` grande + `subtexto` pequeno ao lado).
+     *
+     *  - CONSTRUCTED_AREA / USEFUL_AREA: "m² área bruta" → "m²"
+     *    (o rótulo "Área bruta" já diz o resto).
+     *  - FLOOR_NUMBER: " com elevador" → "com elevador"
+     *    (o espaço inicial vinha do Idealista).
+     *  - Outros: mantém o `subText` como está (trim).
+     */
+    function limparSubtexto(featureName, subText) {
+        if (!subText) return null;
+        const s = subText.trim();
+        if (!s) return null;
+        switch (featureName) {
+            case 'CONSTRUCTED_AREA':
+            case 'USEFUL_AREA':
+                return 'm²';
+            case 'FLOOR_NUMBER':
+                return s.replace(/^\s+/, '');
+            default:
+                return s;
+        }
+    }
+
+    /**
+     * Converte `adDetail.headerFeatures` para o formato do payload
+     * (`{nome, valor, subtexto}`), filtrando nulos e o `PRICE`.
+     */
+    function extrairCaracteristicas(headerFeatures) {
+        if (!Array.isArray(headerFeatures)) return [];
+        return headerFeatures
+            .filter(f => f && f.featureName && f.featureName !== 'PRICE')
+            .map(f => ({
+                nome: ROTULOS_CARACTERISTICAS[f.featureName] || f.featureName,
+                valor: f.text ?? null,
+                subtexto: limparSubtexto(f.featureName, f.subText),
+            }));
+    }
 
     // ============================================
     // UTILITÁRIOS
@@ -84,7 +148,7 @@
     }
 
     // ============================================
-    // EXTRAÇÃO (idêntica ao original)
+    // EXTRAÇÃO
     // ============================================
     async function obterTelefone(adId) {
         try {
@@ -165,13 +229,7 @@
 
         if (typeof adDetail !== 'undefined' && adDetail) {
             dados.titulo = adDetail.headerTitle ?? null;
-            dados.caracteristicas = (adDetail.headerFeatures || [])
-                .filter(f => f)
-                .map(f => ({
-                    nome: f?.featureName ?? null,
-                    valor: f?.text ?? null,
-                    subtexto: f?.subText ?? null,
-                }));
+            dados.caracteristicas = extrairCaracteristicas(adDetail.headerFeatures);
         } else {
             dados.titulo = null;
             dados.caracteristicas = [];
