@@ -47,6 +47,8 @@ else:
             "https://www.idealista.pt",
             "https://idealista.pt",
             "https://supercasa.pt",
+            "https://imovirtual.com",
+            "https://www.imovirtual.com",
             "https://www.supercasa.pt",
             "https://crm.chanilaicastro.pt",
             "https://imoveis.chanilaicastro.pt",
