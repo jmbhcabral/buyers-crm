@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Buyers CRM - Extrator Imovirtual
 // @namespace    https://buyers-crm.local
-// @version      1.0.0
+// @version      1.0.2
 // @description  Envia dados de imóveis do Imovirtual para o Buyers CRM.
 // @author       Tu
 // @match        https://www.imovirtual.com/pt/anuncio/*
@@ -107,8 +107,8 @@
         }
     }
 
-    /** Normaliza um valor de atributo traduzindo enum → texto PT. */
-    const TRADUCOES = {
+    // ---- Traduções de valores (enum → PT) ----
+    const TRADUCOES_VALOR = {
         floor_0: '0', floor_1: '1', floor_2: '2', floor_3: '3',
         floor_4: '4', floor_5: '5', floor_6: '6', floor_7: '7',
         floor_8: '8', floor_9: '9', floor_10: '10',
@@ -124,23 +124,50 @@
         oven: 'forno',
         anti_burglary_door: 'portas e janelas de segurança',
         two_storey: 'duplex',
+        private: 'particular',
+        private_person: 'particular',
+        agency: 'agência',
     };
-    function traduzir(v) {
+    function traduzirValor(v) {
         if (v == null) return null;
         const s = String(v);
-        return TRADUCOES[s] || s;
+        const partes = s.split('::');
+        const ultimo = partes[partes.length - 1];
+        return TRADUCOES_VALOR[ultimo] || ultimo;
     }
 
-    /** Extrai a tipologia (T0..T5) do título. */
-    function obterTipologia(titulo) {
-        const m = (titulo || '').match(/\bT(\d+)\b/);
-        return m ? `T${m[1]}` : null;
+    // ---- Traduções de labels (topInformation.label → PT) ----
+    const TRADUCOES_LABEL = {
+        area: 'Área',
+        construction_status: 'Estado de construção',
+        floor: 'Piso',
+        rooms_num: 'N.º de divisões',
+        market: 'Mercado',
+        building_ownership: 'Forma de propriedade',
+        advertiser_type: 'Tipo de anunciante',
+        security_types: 'Segurança',
+        bathrooms_num: 'N.º de casas de banho',
+        extras_types: 'Extras',
+        lift: 'Elevador',
+        building_type: 'Tipo de imóvel',
+        equipment_types: 'Equipamento',
+        windows_type: 'Janelas',
+    };
+    function traduzirLabel(l) {
+        if (!l) return '';
+        return TRADUCOES_LABEL[l] || l;
     }
 
-    /**
-     * Características "principais" a partir de `ad.attributes`.
-     * Formato: { nome, valor, subtexto } — igual ao Idealista/Supercasa.
-     */
+    /** Extrai a tipologia (T0..T5) do título SEO ou do título. */
+    function obterTipologia(ad) {
+        const fontes = [ad.seo?.title, ad.title];
+        for (const f of fontes) {
+            const m = (f || '').match(/\bT(\d+)\b/);
+            if (m) return `T${m[1]}`;
+        }
+        return null;
+    }
+
     function extrairCaracteristicas(ad) {
         const a = ad.attributes || {};
         const lista = [];
@@ -148,7 +175,7 @@
         if (a.m != null) {
             lista.push({ nome: 'Área bruta', valor: String(a.m), subtexto: 'm²' });
         }
-        const tipologia = obterTipologia(ad.title);
+        const tipologia = obterTipologia(ad);
         if (tipologia) {
             lista.push({ nome: 'Tipologia', valor: tipologia, subtexto: null });
         }
@@ -156,70 +183,62 @@
             lista.push({ nome: 'Casas de banho', valor: String(a.bathrooms_num), subtexto: null });
         }
         if (a.floor_no != null) {
-            lista.push({ nome: 'Piso', valor: traduzir(a.floor_no), subtexto: null });
+            lista.push({ nome: 'Piso', valor: traduzirValor(a.floor_no), subtexto: null });
         }
         if (a.energy_certificate != null) {
-            lista.push({ nome: 'Certificado energético', valor: traduzir(a.energy_certificate), subtexto: null });
+            lista.push({ nome: 'Certificado energético', valor: traduzirValor(a.energy_certificate), subtexto: null });
         }
         if (a.building_type != null) {
-            lista.push({ nome: 'Tipo de imóvel', valor: traduzir(a.building_type), subtexto: null });
+            lista.push({ nome: 'Tipo de imóvel', valor: traduzirValor(a.building_type), subtexto: null });
         }
         if (a.building_ownership != null) {
-            lista.push({ nome: 'Forma de propriedade', valor: traduzir(a.building_ownership), subtexto: null });
+            lista.push({ nome: 'Forma de propriedade', valor: traduzirValor(a.building_ownership), subtexto: null });
         }
 
         return lista;
     }
 
-    /**
-     * Características "específicas" agrupadas.
-     * Formato: { grupo, itens[] } — igual ao Supercasa.
-     */
     function extrairCaracteristicasEspecificas(ad) {
         const a = ad.attributes || {};
         const grupos = [];
 
-        // Grupo "Detalhes" — a partir de topInformation
         const detalhes = [];
         (ad.topInformation || []).forEach(t => {
             if (!t.label || !t.values || t.values.length === 0) return;
+            const label = traduzirLabel(t.label);
             const valores = t.values
-                .map(v => traduzir(String(v).split('::').pop()))
+                .map(v => traduzirValor(String(v)))
                 .filter(Boolean)
                 .join(', ');
             if (valores) {
-                detalhes.push(`${t.label}: ${valores}${t.unit ? ' ' + t.unit : ''}`);
+                detalhes.push(`${label}: ${valores}${t.unit ? ' ' + t.unit : ''}`);
             }
         });
         if (detalhes.length) grupos.push({ grupo: 'Detalhes', itens: detalhes });
 
-        // Grupo "Equipamento"
         if (Array.isArray(a.equipment_types) && a.equipment_types.length) {
             grupos.push({
                 grupo: 'Equipamento',
-                itens: a.equipment_types.map(traduzir).filter(Boolean),
+                itens: a.equipment_types.map(traduzirValor).filter(Boolean),
             });
         }
 
-        // Grupo "Segurança"
         if (Array.isArray(a.security_types) && a.security_types.length) {
             grupos.push({
                 grupo: 'Segurança',
-                itens: a.security_types.map(traduzir).filter(Boolean),
+                itens: a.security_types.map(traduzirValor).filter(Boolean),
             });
         }
 
-        // Grupo "Edifício e materiais"
         const edificio = [];
-        if (a.windows_type) edificio.push(`Janelas: ${traduzir(a.windows_type)}`);
-        if (a.building_type) edificio.push(`Tipo de imóvel: ${traduzir(a.building_type)}`);
-        if (a.energy_certificate) edificio.push(`Certificado energético: ${traduzir(a.energy_certificate)}`);
+        if (a.windows_type) edificio.push(`Janelas: ${traduzirValor(a.windows_type)}`);
+        if (a.building_type) edificio.push(`Tipo de imóvel: ${traduzirValor(a.building_type)}`);
+        if (a.energy_certificate) edificio.push(`Certificado energético: ${traduzirValor(a.energy_certificate)}`);
         if (edificio.length) grupos.push({ grupo: 'Edifício e materiais', itens: edificio });
 
         return grupos;
     }
 
-    /** Converte HTML em texto simples (para a descrição). */
     function htmlParaTexto(html) {
         if (!html) return null;
         const div = document.createElement('div');
@@ -227,7 +246,6 @@
         return (div.innerText || div.textContent || '').trim() || null;
     }
 
-    /** Localização legível a partir das reverseGeocoding locations. */
     function extrairLocalizacao(ad) {
         const locs = ad.location?.reverseGeocoding?.locations || [];
         const nomes = [];
@@ -236,20 +254,21 @@
             else if (l.locationLevel === 'council' && l.name) nomes.push(l.name);
             else if (l.locationLevel === 'district' && l.name) nomes.push(l.name);
         }
-        // Dedupe consecutivo (Odivelas, Odivelas, Lisboa → Odivelas, Lisboa)
         const dedup = nomes.filter((n, i) => i === 0 || n !== nomes[i - 1]);
         return dedup.length ? dedup : null;
     }
 
-    /** Preço formatado (o backend guarda string). */
     function extrairPreco(ad) {
-        const p = ad.price?.salePrice;
-        if (!p || p.value == null) return null;
-        return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: p.currency || 'EUR' })
-            .format(p.value).replace(/\u00A0/g, ' ');
+        const precoNum = ad.target?.Price;
+        if (precoNum != null && !isNaN(Number(precoNum))) {
+            return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' })
+                .format(Number(precoNum)).replace(/\u00A0/g, ' ');
+        }
+        const char = (ad.characteristics || []).find(c => c.key === 'price');
+        if (char?.localizedValue) return char.localizedValue;
+        return null;
     }
 
-    /** Fotos (URL large de cada uma, dedupe por url). */
     function extrairFotos(ad) {
         const vistos = new Set();
         const lista = [];
@@ -272,16 +291,53 @@
         return lista;
     }
 
-    /** Extrai o x-captcha-token (reCAPTCHA) da página, se existir. */
     function obterCaptchaToken() {
-        // O Imovirtual usa reCAPTCHA v3; o token é gerado por JS.
-        // Tentamos ler de inputs escondidos ou de window.grecaptcha.
         const input = document.querySelector('input[name="x-captcha-token"], input[name="captchaToken"]');
         if (input && input.value) return input.value.trim();
         return null;
     }
 
-    /** Extrai o telefone via GraphQL (AdContactPhoneNumbers). */
+    /**
+     * Fallback: lê o telefone do DOM depois de o utilizador clicar em
+     * "Mostrar número".
+     *
+     * O DOM do Imovirtual muda radicalmente após o clique:
+     *  - ANTES: <button data-cy="phone-number.show-full-number-button">
+     *             ...Mostrar número...
+     *           </button>
+     *  - DEPOIS: <a data-cy="phone-number.number-button"
+     *              href="tel:935 670 406">...935 670 406...</a>
+     *
+     * O `href` é o sítio mais fiável para ler o número.
+     */
+    function obterTelefoneDoDom() {
+        // 1. Elemento pós-clique (link tel:)
+        const link = document.querySelector('a[data-cy="phone-number.number-button"]');
+        if (link) {
+            const href = link.getAttribute('href') || '';
+            const m = href.match(/^tel:\s*(.+)$/i);
+            if (m) {
+                const num = m[1].replace(/\s/g, '').trim();
+                if (num) return num;
+            }
+            // Fallback: ler o texto do link
+            const txt = (link.innerText || link.textContent || '').trim();
+            const m2 = txt.match(/(\+?351)?[\s-]?(\d{3})[\s-]?(\d{3})[\s-]?(\d{3})/);
+            if (m2) return (m2[1] || '') + m2[2] + m2[3] + m2[4];
+        }
+
+        // 2. Elemento pré-clique (ainda diz "Mostrar número") — não há número
+        const botao = document.querySelector('[data-cy="phone-number.show-full-number-button"]');
+        if (botao) {
+            const txt = (botao.innerText || botao.textContent || '').trim();
+            if (!txt || /mostrar\s*n[uú]mero/i.test(txt)) return null;
+            const m = txt.match(/(\+?351)?[\s-]?(\d{3})[\s-]?(\d{3})[\s-]?(\d{3})/);
+            if (m) return (m[1] || '') + m[2] + m[3] + m[4];
+        }
+
+        return null;
+    }
+
     async function obterTelefone(adId) {
         const captcha = obterCaptchaToken();
 
@@ -308,37 +364,49 @@
                 }),
             });
 
-            if (!resp.ok) {
-                return { fonte: 'AJAX', numero: null, telefones: [], temTelemovel: false,
-                         erro: `HTTP ${resp.status}` };
+            if (resp.ok) {
+                const dados = await resp.json();
+                const contactos = dados?.data?.ad?.contacts || [];
+                const numeros = contactos
+                    .map(c => c.phoneNumber)
+                    .filter(Boolean)
+                    .map(n => String(n).replace(/\s/g, '').trim());
+
+                if (numeros.length > 0) {
+                    return {
+                        fonte: 'AJAX',
+                        numero: numeros[0],
+                        telefones: numeros.map(n => ({ number: n, formatted: n, type: null })),
+                        temTelemovel: false,
+                        erro: null,
+                    };
+                }
             }
+        } catch (e) {
+            warn('GraphQL falhou:', e.message);
+        }
 
-            const dados = await resp.json();
-            const contactos = dados?.data?.ad?.contacts || [];
-            const numeros = contactos
-                .map(c => c.phoneNumber)
-                .filter(Boolean)
-                .map(n => String(n).replace(/\s/g, '').trim());
-
-            if (numeros.length === 0) {
-                return { fonte: 'AJAX', numero: null, telefones: [], temTelemovel: false,
-                         erro: 'Sem telefone disponível' };
-            }
-
+        // Fallback: DOM (o utilizador tem de ter clicado em "Mostrar número")
+        const dom = obterTelefoneDoDom();
+        if (dom) {
             return {
-                fonte: 'AJAX',
-                numero: numeros[0],
-                telefones: numeros.map(n => ({ number: n, formatted: n, type: null })),
+                fonte: 'DOM',
+                numero: dom,
+                telefones: [{ number: dom, formatted: dom, type: null }],
                 temTelemovel: false,
                 erro: null,
             };
-        } catch (e) {
-            return { fonte: 'AJAX', numero: null, telefones: [], temTelemovel: false,
-                     erro: e.message };
         }
+
+        return {
+            fonte: 'AJAX',
+            numero: null,
+            telefones: [],
+            temTelemovel: false,
+            erro: 'Telefone indisponível (GraphQL sem contacts; DOM sem número visível). Clica em "Mostrar número" antes de extrair.',
+        };
     }
 
-    /** Constrói o payload final. */
     async function extrairDados() {
         const idExterno = obterIdExterno();
         if (!idExterno) throw new Error('id externo não encontrado no URL');
@@ -376,7 +444,6 @@
 
             fotos: extrairFotos(ad),
 
-            // Campos exclusivos do Imovirtual (guardados no raw_json da origem)
             imovirtual: {
                 adId: adIdNumerico,
                 publicId: idExterno,
@@ -431,7 +498,6 @@
             const resultado = await resp.json();
             log('Resultado:', resultado);
 
-            // Guardar no histórico local
             const hist = GM_getValue(CHAVE_HISTORICO, []);
             hist.unshift({
                 idExterno: dados.idExterno,
@@ -440,7 +506,6 @@
             });
             GM_setValue(CHAVE_HISTORICO, hist.slice(0, 50));
 
-            // Notificação
             const acao = resultado.acao;
             if (acao === 'criado') {
                 notificar(`✅ Imóvel criado (${resultado.fotos_novas} fotos)`, COR_SUCESSO, 5000);
@@ -573,7 +638,7 @@
     // ============================================
     function esperarPaginaPronta() {
         let tentativas = 0;
-        const maxTentativas = 40; // 20s
+        const maxTentativas = 40;
 
         const intervalo = setInterval(() => {
             tentativas++;
