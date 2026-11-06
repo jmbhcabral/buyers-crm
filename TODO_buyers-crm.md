@@ -5,10 +5,20 @@ Buyers CRM — TODO
 Concluído nesta ronda (2026-11-06)
 - Ingestão multi-plataforma (Imovirtual) — entregue:
   * `main.py` com CORS para `imovirtual.com` / `www.imovirtual.com`.
-  * Novo `userscripts/buyers-crm-imovirtual.user.js` (1.0.0):
-    extração por `__NEXT_DATA__`, telefone via GraphQL
-    `AdContactPhoneNumbers`, características normalizadas,
-    fotos por `ad.images[].large`.
+  * Novo `userscripts/buyers-crm-imovirtual.user.js` (1.0.2):
+    extração por `__NEXT_DATA__`; preço via `ad.target.Price`;
+    tipologia do `ad.seo.title`; telefone via GraphQL
+    `AdContactPhoneNumbers` + fallback DOM (lê `href="tel:..."`
+    após clicar "Mostrar número"); características
+    normalizadas (valores e labels em PT); fotos por
+    `ad.images[].large` (15 neste anúncio).
+  * Histórico do userscript na ronda:
+    - 1.0.0 → extração base.
+    - 1.0.1 → correções de preço, tipologia, labels PT e
+      fallback DOM para o telefone.
+    - 1.0.2 → corrigido o seletor do fallback DOM
+      (`a[data-cy="phone-number.number-button"]` em vez de
+      `button[data-cy="phone-number.show-full-number-button"]`).
   * Sem migração. Sem alteração ao modelo. Sem alteração ao
     frontend (o `CaracteristicaEspecifica` já cobre o formato).
   * Validado manualmente em dev: payload copiado, ingestão
