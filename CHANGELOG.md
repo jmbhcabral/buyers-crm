@@ -1,4 +1,89 @@
-Buyers CRM — CHANGELOG
+2026-11-06 — Ingestão multi-plataforma: suporte a Imovirtual
+
+Segunda plataforma suportada no `/api/imoveis/ingest`. O backend já
+estava generalizado desde a ronda do Supercasa (tabela
+`imoveis_origem`, lookup por `(fonte, id_externo)`, fotos sem
+`idealista_id`), pelo que as alterações foram mínimas: novo
+userscript + CORS.
+
+Backend
+- `main.py`: CORS passa a permitir `https://imovirtual.com` e
+  `https://www.imovirtual.com` no bloco de produção.
+- **Sem migração.** **Sem alteração ao modelo.** O CHECK em
+  `imoveis_origem.fonte` já incluía `imovirtual`.
+
+Userscripts
+- Novo `userscripts/buyers-crm-imovirtual.user.js` (1.0.0):
+  * Extração principal por `__NEXT_DATA__` (estado do Next.js), em
+    `props.pageProps.ad`. É mais fiável do que parsing de DOM — o
+    Imovirtual não expõe um JSON-LD rico como o Supercasa.
+  * `fonte: "imovirtual"`, `idExterno` do URL
+    (`/-ID([A-Za-z0-9]+)$/`), `propertyId` omitido.
+  * `ad.id` numérico (ex.: `19298846`) fica no bloco `imovirtual`
+    do payload (`adId`), porque é o que o GraphQL usa. O
+    `idExterno` (`1iYwI`) é a chave estável de dedupe.
+  * Telefone via `POST /api/query` (GraphQL,
+    `operationName: "AdContactPhoneNumbers"`,
+    `variables: {id: "<ad.id>", shouldIncludeOwnerAccountPhone:
+    false}`). Envia `x-captcha-token` se o encontrar na página
+    (input escondido); se não encontrar, tenta mesmo assim e
+    devolve `{fonte: 'AJAX', numero: null, erro: '<motivo>'}` em
+    caso de falha — mesmo padrão do Supercasa.
+  * Descrição: `ad.description` (HTML) → strip de tags → texto.
+  * Características principais: `ad.attributes` normalizado para
+    `{nome, valor, subtexto}` com tradução de enums
+    (`bminus` → `B-`, `floor_3` → `3`, `block` → `bloco de
+    apartamentos`, etc.). Tipologia extraída do título via
+    regex `\bT(\d+)\b` (o `rooms_num` do Imovirtual é o total de
+    divisões, não quartos).
+  * Características específicas agrupadas em `{grupo, itens[]}`:
+    `Detalhes` (de `ad.topInformation`), `Equipamento` (de
+    `equipment_types`), `Segurança` (de `security_types`),
+    `Edifício e materiais` (de `windows_type`, `building_type`,
+    `energy_certificate`). Formato igual ao Supercasa — o
+    `renderCaracteristicaEspecifica` do `DetalhePage` já o
+    renderiza sem alterações.
+  * Fotos: `ad.images[].large` (URLs `...;s=2048x1536;q=80`),
+    dedupe por `url_original`. Nome do ficheiro no backend por
+    hash SHA-1 do URL (já implementado).
+  * Bloco `imovirtual` no payload (JSON-LD cru, `ad.attributes`,
+    `topInformation`, `location`, `owner`, `nextDataRaw`) —
+    guardado no `raw_json` da origem (aceite por
+    `extra="allow"`).
+  * Painel e menu Tampermonkey idênticos ao do Supercasa, com
+    histórico local separado
+    (`buyers_crm_historico_imovirtual`).
+
+Frontend privado / público
+- **Nenhuma alteração.** `CaracteristicaEspecifica` em `types.ts`
+  já cobre `{grupo, itens[]}` (foi estendido na ronda do
+  Supercasa). O `renderCaracteristicaEspecifica` do
+  `DetalhePage` já lida com strings e grupos.
+
+Validação manual em dev:
+- Payload do Imovirtual copiado e validado (15 fotos, telefone
+  `+351935670406`, características normalizadas, descrição real).
+- `POST /api/imoveis/ingest` com `fonte="imovirtual"` e
+  `idExterno="1iYwI"` cria `imoveis_origem` com
+  `(imovirtual, 1iYwI)`.
+- Reenvio do mesmo payload → `acao="atualizado"`, sem duplicar
+  origem nem fotos.
+- Detalhe público do imóvel Imovirtual renderiza sem erros;
+  secção "Detalhes" mostra os grupos.
+
+Notas
+- O `@version` do userscript é 1.0.0; o Tampermonkey apanha a
+  alteração no próximo reload da página do Imovirtual.
+- **Decisão registada — `idExterno` = parte após `-ID` no URL.**
+  É estável e aparece no URL canónico; o `ad.id` numérico fica no
+  `raw_json` da origem. Se um dia for preciso cruzar com o
+  Imovirtual por `ad.id`, está lá.
+- **Decisão registada — telefone via GraphQL.** O Imovirtual não
+  tem um endpoint dedicado como o `getphone` do Supercasa; usa
+  GraphQL. O `x-captcha-token` é o ponto frágil (reCAPTCHA v3);
+  se o Imovirtual mudar a política, o telefone fica `null` mas a
+  ingestão continua a funcionar. Padrão igual ao Supercasa.
+- Properstar fica para próxima ronda.
 
 2026-11-05 — Fix: características e descrição do Supercasa no detalhe público
 

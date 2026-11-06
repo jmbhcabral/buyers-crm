@@ -1,6 +1,18 @@
 Buyers CRM — TODO
 
-Última atualização: 2026-11-05
+Última atualização: 2026-11-06
+
+Concluído nesta ronda (2026-11-06)
+- Ingestão multi-plataforma (Imovirtual) — entregue:
+  * `main.py` com CORS para `imovirtual.com` / `www.imovirtual.com`.
+  * Novo `userscripts/buyers-crm-imovirtual.user.js` (1.0.0):
+    extração por `__NEXT_DATA__`, telefone via GraphQL
+    `AdContactPhoneNumbers`, características normalizadas,
+    fotos por `ad.images[].large`.
+  * Sem migração. Sem alteração ao modelo. Sem alteração ao
+    frontend (o `CaracteristicaEspecifica` já cobre o formato).
+  * Validado manualmente em dev: payload copiado, ingestão
+    end-to-end, detalhe público sem erros.
 
 Concluído nesta ronda (2026-11-05)
 - Ingestão multi-plataforma (Supercasa) — entregue:
@@ -177,13 +189,12 @@ Escolher entre:
 Funcionalidades e melhorias pendentes
 
 Captação multi-plataforma
-- Userscript Imovirtual (mesma estrutura de origem).
 - Userscript Properstar (atenção: o Imovirtual pode exportar para
   a Properstar — dedupe por `id_externo` não chega, é preciso
   cruzar `referenciaAnunciante` ou `url`).
 - Testes de integração do `/ingest` multi-plataforma (payload
-  Idealista vs Supercasa; 422 quando faltam `propertyId` ou
-  `idExterno`; dedupe por `(fonte, id_externo)`).
+  Idealista vs Supercasa vs Imovirtual; 422 quando faltam
+  `propertyId` ou `idExterno`; dedupe por `(fonte, id_externo)`).
 
 CRM e gestão de imóveis
 - Exportar CSV de imóveis e clientes.
@@ -290,11 +301,10 @@ Frontend público (extensões)
   que é pouco natural).
 - **Generalizar `renderCaracteristicaEspecifica` a outras
   plataformas.** Hoje trata dois formatos: `string[]` (Idealista)
-  e `{grupo, itens[]}[]` (Supercasa). Se o Imovirtual ou a
-  Properstar trouxerem outro formato, a união
-  `CaracteristicaEspecifica` tem de ser estendida (e o
-  `DetalhePage` também). O backend continua a espelhar o formato
-  de origem — não normaliza.
+  e `{grupo, itens[]}[]` (Supercasa e Imovirtual). Se a Properstar
+  trouxer outro formato, a união `CaracteristicaEspecifica` tem de
+  ser estendida (e o `DetalhePage` também). O backend continua a
+  espelhar o formato de origem — não normaliza.
 - **Detalhe público: esconder telefone do anúncio quando vier
   como objeto.** No Supercasa, `telefone` vem como `{erro, fonte,
   numero, telefones, temTelemovel}` (não é string). O
