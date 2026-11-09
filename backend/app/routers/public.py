@@ -485,7 +485,7 @@ def obter_imovel_publico(
         titulo=versao.titulo or canonico.titulo,
         preco=versao.preco or canonico.preco,
         localizacao=versao.localizacao or canonico.localizacao,
-        descricao=canonico.descricao,
+        descricao=versao.descricao or canonico.descricao
         caracteristicas=canonico.caracteristicas,
         caracteristicas_especificas=canonico.caracteristicas_especificas,
         telefone=canonico.telefone,
