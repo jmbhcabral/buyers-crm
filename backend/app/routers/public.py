@@ -169,6 +169,19 @@ def _validar_imovel_no_link(
     return versao
 
 
+def _resolver_apresentacao_id(db: DbSession, link: LinkCliente) -> int:
+    """Quem aparece na página pública.
+
+    Preferência: `consultor_apresentacao_id` (escolhido pela equipa).
+    Fallback: `consultor_id` (dono do link), se o campo estiver NULL
+    ou se apontar para um consultor que já não existe.
+    """
+    if link.consultor_apresentacao_id is not None:
+        if db.get(Consultor, link.consultor_apresentacao_id) is not None:
+            return link.consultor_apresentacao_id
+    return link.consultor_id
+
+
 def _build_consultor_public(db: DbSession, consultor_id: int) -> ConsultorPublic | None:
     """Constrói o ConsultorPublic (com foto cache-busted e email)."""
     consultor = db.get(Consultor, consultor_id)
@@ -361,7 +374,7 @@ def obter_link_publico(
                 )
             )
 
-    consultor_public = _build_consultor_public(db, link.consultor_id)
+    consultor_public = _build_consultor_public(db, _resolver_apresentacao_id(db, link))
 
     _registar_acesso(db, link, request, imovel_versao_id=None)
 
@@ -478,7 +491,7 @@ def obter_imovel_publico(
 
     _registar_acesso(db, link, request, imovel_versao_id=versao_id)
 
-    consultor_public = _build_consultor_public(db, versao.consultor_id)
+    consultor_public = _build_consultor_public(db, _resolver_apresentacao_id(db, link))
 
     return PublicImovelDetalhe(
         imovel_versao_id=versao.id,
